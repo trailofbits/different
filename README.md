@@ -25,10 +25,4 @@ Run the full workflow (extract -> check):
 uv sync --all-groups
 different-agent --inspiration /path/to/inspiration-repo --target /path/to/target-repo
 ```
-
-At the end of each run, the CLI logs either total cost (if the model/provider returns cost metadata) or total token usage.
-Example log line (token fallback):
-
-```text
-2026-01-26 14:02:11 INFO Run token usage: input=48291, output=9213, total=57504.
-```
+ 

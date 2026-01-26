@@ -61,7 +61,11 @@ class TargetAssessmentsResponse(BaseModel):
     assessments: list[TargetAssessment]
 
 
-INSPIRATION_AGENT_PROMPT = f"""You analyze an inspiration codebase and extract structured "fix findings".
+INSPIRATION_AGENT_PROMPT = f"""You analyze a codebase and extract structured “fix findings.”
+You do this because you will then feed all of your findings to an agent that checks whether the bugs you found also apply to other codebases.
+For example, if a bug that introduces a security issue is discovered in a WASM virtual machine and is fixed via a commit,
+you want to extract that bug so another agent can check whether it can be reproduced in another repository that also implements a WASM virtual machine.
+The goal is to extract all bug fixes that may have addressed previously introduced security issues, ranging from low- to high-severity.
 
 Inputs:
 - A local git repository path (it will have a .git directory).
@@ -76,7 +80,7 @@ The user message will include:
 - max_prs: <int>
 
 Goal:
-- Identify recent bug fixes and vulnerability fixes from commit history.
+- Identify recent bug fixes or vulnerability fixes from commit history.
 - If GitHub data is available, also use recent Issues/PRs and (when useful) fetch Issue/PR content for context.
 - Produce a JSON array of findings (schema: {FINDING_SCHEMA_VERSION}) with solid evidence.
 - Capture enough idea-level detail so a separate agent can check for similar concepts in a target repo (not 1:1

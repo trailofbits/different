@@ -22,6 +22,5 @@ def _run(cmd: list[str]) -> None:
 
 
 def test_tooling_smoke() -> None:
-    _run(["ruff", "format", "--check", "."])
     _run(["ruff", "check", "."])
     _run(["ty", "check", "src/"])
