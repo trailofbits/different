@@ -25,7 +25,7 @@ def _ensure_git_repo(repo_path: str) -> None:
 def _run_git(repo_path: str, args: list[str]) -> GitCommandResult:
     _ensure_git_repo(repo_path)
     cmd = ["git", "-C", repo_path, *args]
-    logger.debug("git command repo=%s args=%s", repo_path, args)
+    logger.debug("Running git command in %s: %s.", repo_path, args)
     completed = subprocess.run(
         cmd,
         check=True,
@@ -39,7 +39,7 @@ def _run_git(repo_path: str, args: list[str]) -> GitCommandResult:
 def git_recent_commits(repo_path: str, since_days: int = 30, max_count: int = 50) -> list[dict]:
     """Return recent commits for a repository (metadata only, no diffs)."""
     logger.info(
-        "git_recent_commits repo=%s since_days=%s max_count=%s",
+        "Reading recent commits from %s (since_days=%s, max_count=%s).",
         repo_path,
         since_days,
         max_count,
@@ -77,7 +77,7 @@ def git_recent_commits(repo_path: str, since_days: int = 30, max_count: int = 50
                 "subject": subject,
             }
         )
-    logger.info("git_recent_commits result_count=%s", len(commits))
+    logger.info("Found %s recent commits.", len(commits))
     return commits
 
 
@@ -85,9 +85,9 @@ def git_recent_commits(repo_path: str, since_days: int = 30, max_count: int = 50
 def git_show_commit(repo_path: str, sha: str, max_patch_lines: int = 400) -> dict:
     """Return commit metadata + file list + a truncated patch."""
     logger.info(
-        "git_show_commit repo=%s sha=%s max_patch_lines=%s",
-        repo_path,
+        "Loading commit %s from %s (max_patch_lines=%s).",
         sha,
+        repo_path,
         max_patch_lines,
     )
     if max_patch_lines <= 0:
@@ -139,7 +139,7 @@ def git_show_commit(repo_path: str, sha: str, max_patch_lines: int = 400) -> dic
         truncated = True
 
     logger.info(
-        "git_show_commit files=%s patch_truncated=%s",
+        "Loaded commit metadata. Files changed: %s. Patch truncated: %s.",
         len(files_changed),
         truncated,
     )
@@ -159,10 +159,10 @@ def git_show_commit(repo_path: str, sha: str, max_patch_lines: int = 400) -> dic
 def git_show_file(repo_path: str, file_path: str, ref: str = "HEAD", max_lines: int = 400) -> dict:
     """Read a file from a git repository at a given ref."""
     logger.info(
-        "git_show_file repo=%s path=%s ref=%s max_lines=%s",
-        repo_path,
+        "Reading %s at %s in %s (max_lines=%s).",
         file_path,
         ref,
+        repo_path,
         max_lines,
     )
     if max_lines <= 0:
@@ -174,10 +174,10 @@ def git_show_file(repo_path: str, file_path: str, ref: str = "HEAD", max_lines: 
     if completed.returncode != 0:
         error = (completed.stderr or "").strip() or "git show failed"
         logger.warning(
-            "git_show_file failed repo=%s path=%s ref=%s error=%s",
-            repo_path,
+            "Failed to read %s at %s in %s: %s.",
             file_path,
             ref,
+            repo_path,
             error,
         )
         return {"error": error}
@@ -187,7 +187,7 @@ def git_show_file(repo_path: str, file_path: str, ref: str = "HEAD", max_lines: 
     if len(lines) > max_lines:
         lines = lines[:max_lines]
         truncated = True
-    logger.info("git_show_file truncated=%s", truncated)
+    logger.info("File content was truncated: %s.", truncated)
     return {
         "ref": ref,
         "path": file_path,
@@ -203,9 +203,9 @@ def git_grep(
     """Search tracked files in a git repository (via `git grep`)."""
     pattern_preview = pattern if len(pattern) <= 120 else f"{pattern[:120]}..."
     logger.info(
-        "git_grep repo=%s pattern=%r fixed_string=%s max_matches=%s",
-        repo_path,
+        "Searching for %r in %s (fixed_string=%s, max_matches=%s).",
         pattern_preview,
+        repo_path,
         fixed_string,
         max_matches,
     )
@@ -234,5 +234,5 @@ def git_grep(
         matches.append({"path": path, "line": int(line_no), "text": text})
         if len(matches) >= max_matches:
             break
-    logger.info("git_grep result_count=%s", len(matches))
+    logger.info("Found %s matches.", len(matches))
     return matches

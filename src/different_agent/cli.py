@@ -126,7 +126,7 @@ def _configure_logging() -> None:
     handler = logging.StreamHandler()
     handler.setFormatter(
         _ColorFormatter(
-            "%(asctime)s %(levelname)s %(name)s: %(message)s",
+            "%(asctime)s %(levelname)s %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S",
         )
     )
@@ -139,7 +139,7 @@ def _configure_logging() -> None:
 
 def main() -> int:
     _configure_logging()
-    logger.info("starting different-agent")
+    logger.info("Starting different-agent.")
     load_dotenv()
 
     parser = argparse.ArgumentParser(prog="different-agent")
@@ -183,29 +183,29 @@ def main() -> int:
 
     args = parser.parse_args()
     cfg_path = _default_config_path(args.config)
-    logger.info("loading config path=%s", cfg_path)
+    logger.info("Loading config from %s.", cfg_path)
     cfg = load_config(cfg_path)
     cfg = _apply_cli_overrides(cfg, args)
     logger.info(
-        "config model=%s provider=%s reasoning_effort=%s temperature=%s",
+        "Using model %s with provider %s (reasoning_effort=%s, temperature=%s).",
         cfg.model.name,
         cfg.model.provider,
         cfg.model.reasoning_effort,
         cfg.model.temperature,
     )
     logger.info(
-        "config extract since_days=%s max_commits=%s max_patch_lines=%s include_github=%s",
+        "Extractor settings: since_days=%s, max_commits=%s, max_patch_lines=%s, include_github=%s.",
         cfg.extract.since_days,
         cfg.extract.max_commits,
         cfg.extract.max_patch_lines,
         cfg.extract.include_github,
     )
     logger.info(
-        "config extract max_issues=%s max_prs=%s",
+        "GitHub limits: max_issues=%s, max_prs=%s.",
         cfg.extract.max_issues,
         cfg.extract.max_prs,
     )
-    logger.info("config reports html=%s", cfg.reports.html)
+    logger.info("HTML reports enabled: %s.", cfg.reports.html)
 
     resolved = create_chat_model(
         model_name=cfg.model.name,
@@ -213,13 +213,13 @@ def main() -> int:
         temperature=cfg.model.temperature,
         reasoning_effort=cfg.model.reasoning_effort,
     )
-    logger.info("model resolved provider=%s name=%s", resolved.provider, resolved.name)
+    logger.info("Resolved model: provider=%s, name=%s.", resolved.provider, resolved.name)
     cache = InMemoryCache()
 
     inspiration_path = os.path.abspath(args.inspiration)
     target_path = os.path.abspath(args.target)
     logger.info(
-        "run start inspiration_path=%s target_path=%s",
+        "Run starting. Inspiration repo: %s. Target repo: %s.",
         inspiration_path,
         target_path,
     )
@@ -237,30 +237,30 @@ def main() -> int:
         f"max_issues: {cfg.extract.max_issues}\n"
         f"max_prs: {cfg.extract.max_prs}\n"
     )
-    logger.info("invoking inspiration agent")
+    logger.info("Invoking inspiration agent.")
     extract_result = extract_agent.invoke(
         {"messages": [{"role": "user", "content": extract_prompt}]}
     )
-    logger.info("inspiration agent finished")
+    logger.info("Inspiration agent finished.")
     structured_findings = _structured_response_to_list(
         extract_result.get("structured_response"), "findings"
     )
     if structured_findings is not None:
         findings_json = json.dumps(structured_findings)
-        logger.info("using structured_response for findings")
+        logger.info("Using structured response for findings.")
     else:
         findings_json = _extract_state_file(extract_result, "/outputs/findings.json")
         if findings_json is None:
             raise SystemExit("Agent did not write /outputs/findings.json")
     findings_out_path = Path(args.findings_out)
     _write_output_json(findings_out_path, findings_json)
-    logger.info("wrote findings json path=%s", findings_out_path)
+    logger.info("Wrote findings JSON to %s.", findings_out_path)
     if cfg.reports.html:
         findings = json.loads(findings_json)
         if isinstance(findings, list):
             html_path = findings_out_path.with_suffix(".html")
             _write_output_html(html_path, render_findings_html(findings))
-            logger.info("wrote findings html path=%s", html_path)
+            logger.info("Wrote findings HTML report to %s.", html_path)
 
     # Provide the findings JSON to the target agent as an in-memory file.
     # DeepAgents' StateBackend expects FileData objects (content as list of lines).
@@ -278,17 +278,17 @@ def main() -> int:
         "/inputs/findings.json.\n\n"
         f"target_repo_path: {target_path}\n"
     )
-    logger.info("invoking target agent")
+    logger.info("Invoking target agent.")
     target_result = target_agent.invoke(
         {"messages": [{"role": "user", "content": target_prompt}], "files": initial_files}
     )
-    logger.info("target agent finished")
+    logger.info("Target agent finished.")
     structured_assessments = _structured_response_to_list(
         target_result.get("structured_response"), "assessments"
     )
     if structured_assessments is not None:
         assessment_json = json.dumps(structured_assessments)
-        logger.info("using structured_response for target assessment")
+        logger.info("Using structured response for target assessment.")
     else:
         assessment_json = _extract_state_file(
             target_result, "/outputs/target_assessment.json"
@@ -297,12 +297,12 @@ def main() -> int:
             raise SystemExit("Agent did not write /outputs/target_assessment.json")
     assessment_out_path = Path(args.assessment_out)
     _write_output_json(assessment_out_path, assessment_json)
-    logger.info("wrote target assessment json path=%s", assessment_out_path)
+    logger.info("Wrote target assessment JSON to %s.", assessment_out_path)
     if cfg.reports.html:
         assessments = json.loads(assessment_json)
         if isinstance(assessments, list):
             html_path = assessment_out_path.with_suffix(".html")
             _write_output_html(html_path, render_target_assessment_html(assessments))
-            logger.info("wrote target assessment html path=%s", html_path)
+            logger.info("Wrote target assessment HTML report to %s.", html_path)
 
     return 0

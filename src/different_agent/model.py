@@ -48,7 +48,7 @@ def create_chat_model(
 ) -> ResolvedModel:
     provider = _detect_provider(model_name, provider_hint=provider)
     raw_name = _strip_provider_prefix(model_name)
-    logger.info("creating chat model provider=%s name=%s", provider, raw_name)
+    logger.info("Creating chat model %s (provider=%s).", raw_name, provider)
 
     if provider == "openai":
         if not os.environ.get("OPENAI_API_KEY"):

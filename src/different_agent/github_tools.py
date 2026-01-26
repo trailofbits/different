@@ -84,7 +84,7 @@ def _parse_github_repo_from_remote(remote_url: str) -> GitHubRepo | None:
 @tool
 def git_github_repo(repo_path: str, remote: str = "origin") -> dict:
     """Resolve a local repo's GitHub {owner, repo} from its git remote URL."""
-    logger.info("git_github_repo repo=%s remote=%s", repo_path, remote)
+    logger.info("Resolving GitHub repo from %s (remote=%s).", repo_path, remote)
     try:
         out = _run_git(repo_path, ["remote", "get-url", remote]).stdout.strip()
     except Exception as e:
@@ -101,7 +101,7 @@ def github_recent_issues(
 ) -> list[dict]:
     """Fetch recent closed issues from GitHub (excludes PRs)."""
     logger.info(
-        "github_recent_issues owner=%s repo=%s since_days=%s max_count=%s",
+        "Fetching recent issues for %s/%s (since_days=%s, max_count=%s).",
         owner,
         repo,
         since_days,
@@ -147,7 +147,7 @@ def github_recent_issues(
         )
         if len(results) >= max_count:
             break
-    logger.info("github_recent_issues result_count=%s", len(results))
+    logger.info("Fetched %s issues.", len(results))
     return results
 
 
@@ -157,7 +157,7 @@ def github_recent_prs(
 ) -> list[dict]:
     """Fetch recent merged/closed PRs from GitHub."""
     logger.info(
-        "github_recent_prs owner=%s repo=%s since_days=%s max_count=%s",
+        "Fetching recent PRs for %s/%s (since_days=%s, max_count=%s).",
         owner,
         repo,
         since_days,
@@ -206,7 +206,7 @@ def github_recent_prs(
         )
         if len(results) >= max_count:
             break
-    logger.info("github_recent_prs result_count=%s", len(results))
+    logger.info("Fetched %s PRs.", len(results))
     return results
 
 
@@ -214,10 +214,10 @@ def github_recent_prs(
 def github_fetch_issue(owner: str, repo: str, number: int) -> dict:
     """Fetch one issue from GitHub."""
     logger.info(
-        "github_fetch_issue owner=%s repo=%s number=%s",
+        "Fetching issue #%s for %s/%s.",
+        number,
         owner,
         repo,
-        number,
     )
     url = f"https://api.github.com/repos/{owner}/{repo}/issues/{number}"
     try:
@@ -244,10 +244,10 @@ def github_fetch_issue(owner: str, repo: str, number: int) -> dict:
 def github_fetch_pr(owner: str, repo: str, number: int) -> dict:
     """Fetch one PR from GitHub (metadata)."""
     logger.info(
-        "github_fetch_pr owner=%s repo=%s number=%s",
+        "Fetching PR #%s for %s/%s.",
+        number,
         owner,
         repo,
-        number,
     )
     url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{number}"
     try:
@@ -271,10 +271,10 @@ def github_fetch_pr(owner: str, repo: str, number: int) -> dict:
 def github_fetch_pr_files(owner: str, repo: str, number: int, max_files: int = 200) -> list[dict]:
     """Fetch PR changed files (+ per-file patch snippets when available)."""
     logger.info(
-        "github_fetch_pr_files owner=%s repo=%s number=%s max_files=%s",
+        "Fetching files for PR #%s in %s/%s (max_files=%s).",
+        number,
         owner,
         repo,
-        number,
         max_files,
     )
     files: list[dict] = []
