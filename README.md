@@ -24,10 +24,3 @@ uv sync --all-groups
 different-agent --inspiration /path/to/inspiration-repo --target /path/to/target-repo
 ```
 
-## Caching
-
-Each run uses a LangGraph in-memory cache for agent execution to reuse identical model calls within the same process. If you use an Anthropic model, Deep Agents also enables Anthropic prompt caching automatically (no extra config needed).
-
-## Structured output
-
-The agents use `response_format` to return structured findings/assessments. The CLI prefers this structured response when writing JSON outputs, and falls back to the agent-written `/outputs/*.json` files if needed.
