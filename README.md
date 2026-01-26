@@ -7,6 +7,8 @@ Different is a small agentic app built with Deep Agents (LangGraph). It does two
 
 The logic is agentic: an LLM calls local Git tools (and optional GitHub API tools) in a loop to inspect commits, diffs, and related PR/issue context. The target assessment agent now follows a security-judge style and appends a clear verdict to each assessment's `why` field.
 
+**If you’re doing differential fuzzing between two codebases, you should also use this tool.**
+
 ## Requirements
 
 The default config uses OpenAI `gpt-5.2` with `reasoning_effort="xhigh"`, so you usually want `OPENAI_API_KEY` set. If you switch to a Claude model via `--model`, you need `ANTHROPIC_API_KEY`.
