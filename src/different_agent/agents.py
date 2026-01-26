@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from deepagents import create_deep_agent
+from langchain.agents.structured_output import AutoStrategy
 from langchain_core.language_models import BaseChatModel
 from langgraph.cache.base import BaseCache
 from pydantic import BaseModel, Field
@@ -204,7 +205,7 @@ def create_inspiration_agent(model: BaseChatModel, cache: BaseCache | None = Non
             github_fetch_pr_files,
         ],
         system_prompt=INSPIRATION_AGENT_PROMPT,
-        response_format=FindingsResponse,
+        response_format=AutoStrategy(FindingsResponse),
         cache=cache,
     )
 
@@ -214,6 +215,6 @@ def create_target_agent(model: BaseChatModel, cache: BaseCache | None = None):
         model=model,
         tools=[git_grep, git_show_file],
         system_prompt=TARGET_AGENT_PROMPT,
-        response_format=TargetAssessmentsResponse,
+        response_format=AutoStrategy(TargetAssessmentsResponse),
         cache=cache,
     )
