@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import html
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -14,7 +14,7 @@ def _safe_json(value: Any) -> str:
 
 
 def render_findings_html(findings: list[dict]) -> str:
-    now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    now = datetime.now(UTC).replace(microsecond=0).isoformat()
     rows = []
     for f in findings:
         rows.append(
@@ -70,7 +70,7 @@ def render_findings_html(findings: list[dict]) -> str:
 
 
 def render_target_assessment_html(assessments: list[dict]) -> str:
-    now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    now = datetime.now(UTC).replace(microsecond=0).isoformat()
     rows = []
     for a in assessments:
         rows.append(
@@ -119,4 +119,3 @@ def render_target_assessment_html(assessments: list[dict]) -> str:
   </body>
 </html>
 """
-

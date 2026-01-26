@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 
 from langchain_core.language_models import BaseChatModel
 
+logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class ResolvedModel:
@@ -45,6 +47,7 @@ def create_chat_model(
 ) -> ResolvedModel:
     provider = _detect_provider(model_name, provider_hint=provider)
     raw_name = _strip_provider_prefix(model_name)
+    logger.info("creating chat model provider=%s name=%s", provider, raw_name)
 
     if provider == "openai":
         if not os.environ.get("OPENAI_API_KEY"):
@@ -53,7 +56,7 @@ def create_chat_model(
 
         return ResolvedModel(
             model=ChatOpenAI(
-                model=raw_name,
+                model_name=raw_name,
                 temperature=temperature,
                 reasoning_effort=reasoning_effort,
             ),
@@ -70,7 +73,7 @@ def create_chat_model(
             model=ChatAnthropic(
                 model_name=raw_name,
                 temperature=temperature,
-                max_tokens=20_000,  # type: ignore[arg-type]
+                max_tokens=20_000,
             ),
             provider=provider,
             name=raw_name,

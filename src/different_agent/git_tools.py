@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 import os
 import subprocess
 from dataclasses import dataclass
 
 from langchain_core.tools import tool
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -22,6 +25,7 @@ def _ensure_git_repo(repo_path: str) -> None:
 def _run_git(repo_path: str, args: list[str]) -> GitCommandResult:
     _ensure_git_repo(repo_path)
     cmd = ["git", "-C", repo_path, *args]
+    logger.debug("git command repo=%s args=%s", repo_path, args)
     completed = subprocess.run(
         cmd,
         check=True,
@@ -34,6 +38,12 @@ def _run_git(repo_path: str, args: list[str]) -> GitCommandResult:
 @tool
 def git_recent_commits(repo_path: str, since_days: int = 30, max_count: int = 50) -> list[dict]:
     """Return recent commits for a repository (metadata only, no diffs)."""
+    logger.info(
+        "git_recent_commits repo=%s since_days=%s max_count=%s",
+        repo_path,
+        since_days,
+        max_count,
+    )
     if since_days <= 0:
         raise ValueError("since_days must be > 0")
     if max_count <= 0:
@@ -67,12 +77,19 @@ def git_recent_commits(repo_path: str, since_days: int = 30, max_count: int = 50
                 "subject": subject,
             }
         )
+    logger.info("git_recent_commits result_count=%s", len(commits))
     return commits
 
 
 @tool
 def git_show_commit(repo_path: str, sha: str, max_patch_lines: int = 400) -> dict:
     """Return commit metadata + file list + a truncated patch."""
+    logger.info(
+        "git_show_commit repo=%s sha=%s max_patch_lines=%s",
+        repo_path,
+        sha,
+        max_patch_lines,
+    )
     if max_patch_lines <= 0:
         raise ValueError("max_patch_lines must be > 0")
 
@@ -121,6 +138,11 @@ def git_show_commit(repo_path: str, sha: str, max_patch_lines: int = 400) -> dic
         patch = "\n".join(patch_lines[:max_patch_lines]) + "\n\n[patch truncated]"
         truncated = True
 
+    logger.info(
+        "git_show_commit files=%s patch_truncated=%s",
+        len(files_changed),
+        truncated,
+    )
     return {
         "sha": commit_sha,
         "author": author,
@@ -136,6 +158,13 @@ def git_show_commit(repo_path: str, sha: str, max_patch_lines: int = 400) -> dic
 @tool
 def git_show_file(repo_path: str, file_path: str, ref: str = "HEAD", max_lines: int = 400) -> dict:
     """Read a file from a git repository at a given ref."""
+    logger.info(
+        "git_show_file repo=%s path=%s ref=%s max_lines=%s",
+        repo_path,
+        file_path,
+        ref,
+        max_lines,
+    )
     if max_lines <= 0:
         raise ValueError("max_lines must be > 0")
 
@@ -143,13 +172,22 @@ def git_show_file(repo_path: str, file_path: str, ref: str = "HEAD", max_lines: 
     cmd = ["git", "-C", repo_path, "show", spec]
     completed = subprocess.run(cmd, check=False, text=True, capture_output=True)
     if completed.returncode != 0:
-        return {"error": (completed.stderr or "").strip() or "git show failed"}
+        error = (completed.stderr or "").strip() or "git show failed"
+        logger.warning(
+            "git_show_file failed repo=%s path=%s ref=%s error=%s",
+            repo_path,
+            file_path,
+            ref,
+            error,
+        )
+        return {"error": error}
 
     lines = completed.stdout.splitlines()
     truncated = False
     if len(lines) > max_lines:
         lines = lines[:max_lines]
         truncated = True
+    logger.info("git_show_file truncated=%s", truncated)
     return {
         "ref": ref,
         "path": file_path,
@@ -159,8 +197,18 @@ def git_show_file(repo_path: str, file_path: str, ref: str = "HEAD", max_lines: 
 
 
 @tool
-def git_grep(repo_path: str, pattern: str, max_matches: int = 50, fixed_string: bool = True) -> list[dict]:
+def git_grep(
+    repo_path: str, pattern: str, max_matches: int = 50, fixed_string: bool = True
+) -> list[dict]:
     """Search tracked files in a git repository (via `git grep`)."""
+    pattern_preview = pattern if len(pattern) <= 120 else f"{pattern[:120]}..."
+    logger.info(
+        "git_grep repo=%s pattern=%r fixed_string=%s max_matches=%s",
+        repo_path,
+        pattern_preview,
+        fixed_string,
+        max_matches,
+    )
     if max_matches <= 0:
         raise ValueError("max_matches must be > 0")
 
@@ -186,4 +234,5 @@ def git_grep(repo_path: str, pattern: str, max_matches: int = 50, fixed_string: 
         matches.append({"path": path, "line": int(line_no), "text": text})
         if len(matches) >= max_matches:
             break
+    logger.info("git_grep result_count=%s", len(matches))
     return matches

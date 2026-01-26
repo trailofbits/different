@@ -112,4 +112,3 @@ def load_config(path: Path) -> AppConfig:
     )
 
     return AppConfig(model=model, extract=extract, reports=reports)
-

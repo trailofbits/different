@@ -7,7 +7,6 @@ First, it looks at an “inspiration” local Git repository and tries to extrac
 Second, it takes that JSON and checks a “target” local Git repository to see if the same problems likely apply there. It outputs another JSON file with one entry per finding.
 
 The logic is agentic: an LLM calls local Git tools (and optional GitHub API tools) in a loop to inspect commits, diffs, and related PR/issue context.
-If you change core behavior, keep `README.md` and `AGENTS.md` updated.
 
 ## Requirements
 
@@ -23,17 +22,10 @@ You can override the model per run with `--model`.
 
 ## Usage
 
-Install (pick one):
+Install (recommended):
 
 ```bash
-uv sync
-```
-
-or:
-
-```bash
-python3 -m venv .venv
-./.venv/bin/pip install -e .
+uv sync --all-groups
 ```
 
 Extract findings from an inspiration repo:
@@ -50,6 +42,10 @@ different-agent check --target /path/to/target-repo --findings outputs/findings.
 
 If `reports.html=true` in `different.toml`, the CLI also writes `outputs/findings.html` and `outputs/target_assessment.html`.
 
+## Logging
+
+The CLI writes INFO-level progress logs to stderr so you can follow startup, config, agent runs, tool calls, and output writes.
+
 ## GitHub (optional)
 
 If GitHub enrichment is enabled, the extractor tries to infer `{owner, repo}` from the inspiration repo’s `origin` remote and then calls the GitHub REST API to pull recent closed issues and PRs. Set `GITHUB_TOKEN` (or `GH_TOKEN`) to avoid rate limits.
@@ -57,3 +53,14 @@ If GitHub enrichment is enabled, the extractor tries to infer `{owner, repo}` fr
 ## Notes
 
 Both inputs must be local Git repos and must contain a `.git/` directory. Output quality depends on the model, prompts, and available context, so treat results as a starting point for review, not a final security verdict.
+
+## Development
+
+Run tooling with `uv run`:
+
+```bash
+uv run ruff format .
+uv run ruff check .
+uv run ty check src/
+uv run pytest
+```

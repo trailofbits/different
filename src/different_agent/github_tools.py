@@ -1,18 +1,20 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from langchain_core.tools import tool
 
 from different_agent.git_tools import _run_git
 
+logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class GitHubRepo:
@@ -44,7 +46,7 @@ def _github_request_json(url: str) -> Any:
 
 
 def _iso_since_days(since_days: int) -> str:
-    dt = datetime.now(timezone.utc) - timedelta(days=since_days)
+    dt = datetime.now(UTC) - timedelta(days=since_days)
     return dt.replace(microsecond=0).isoformat()
 
 
@@ -81,6 +83,7 @@ def _parse_github_repo_from_remote(remote_url: str) -> GitHubRepo | None:
 @tool
 def git_github_repo(repo_path: str, remote: str = "origin") -> dict:
     """Resolve a local repo's GitHub {owner, repo} from its git remote URL."""
+    logger.info("git_github_repo repo=%s remote=%s", repo_path, remote)
     try:
         out = _run_git(repo_path, ["remote", "get-url", remote]).stdout.strip()
     except Exception as e:
@@ -92,8 +95,17 @@ def git_github_repo(repo_path: str, remote: str = "origin") -> dict:
 
 
 @tool
-def github_recent_issues(owner: str, repo: str, since_days: int = 30, max_count: int = 50) -> list[dict]:
+def github_recent_issues(
+    owner: str, repo: str, since_days: int = 30, max_count: int = 50
+) -> list[dict]:
     """Fetch recent closed issues from GitHub (excludes PRs)."""
+    logger.info(
+        "github_recent_issues owner=%s repo=%s since_days=%s max_count=%s",
+        owner,
+        repo,
+        since_days,
+        max_count,
+    )
     since = _iso_since_days(since_days)
     query = urllib.parse.urlencode(
         {
@@ -123,7 +135,9 @@ def github_recent_issues(owner: str, repo: str, since_days: int = 30, max_count:
                 "number": item.get("number"),
                 "title": item.get("title"),
                 "state": item.get("state"),
-                "labels": [l.get("name") for l in item.get("labels", []) if isinstance(l, dict)],
+                "labels": [
+                    label.get("name") for label in item.get("labels", []) if isinstance(label, dict)
+                ],
                 "closed_at": item.get("closed_at"),
                 "updated_at": item.get("updated_at"),
                 "html_url": item.get("html_url"),
@@ -132,13 +146,23 @@ def github_recent_issues(owner: str, repo: str, since_days: int = 30, max_count:
         )
         if len(results) >= max_count:
             break
+    logger.info("github_recent_issues result_count=%s", len(results))
     return results
 
 
 @tool
-def github_recent_prs(owner: str, repo: str, since_days: int = 30, max_count: int = 50) -> list[dict]:
+def github_recent_prs(
+    owner: str, repo: str, since_days: int = 30, max_count: int = 50
+) -> list[dict]:
     """Fetch recent merged/closed PRs from GitHub."""
-    threshold = datetime.now(timezone.utc) - timedelta(days=since_days)
+    logger.info(
+        "github_recent_prs owner=%s repo=%s since_days=%s max_count=%s",
+        owner,
+        repo,
+        since_days,
+        max_count,
+    )
+    threshold = datetime.now(UTC) - timedelta(days=since_days)
     query = urllib.parse.urlencode(
         {
             "state": "closed",
@@ -181,12 +205,19 @@ def github_recent_prs(owner: str, repo: str, since_days: int = 30, max_count: in
         )
         if len(results) >= max_count:
             break
+    logger.info("github_recent_prs result_count=%s", len(results))
     return results
 
 
 @tool
 def github_fetch_issue(owner: str, repo: str, number: int) -> dict:
     """Fetch one issue from GitHub."""
+    logger.info(
+        "github_fetch_issue owner=%s repo=%s number=%s",
+        owner,
+        repo,
+        number,
+    )
     url = f"https://api.github.com/repos/{owner}/{repo}/issues/{number}"
     try:
         item = _github_request_json(url)
@@ -198,7 +229,9 @@ def github_fetch_issue(owner: str, repo: str, number: int) -> dict:
         "number": item.get("number"),
         "title": item.get("title"),
         "state": item.get("state"),
-        "labels": [l.get("name") for l in item.get("labels", []) if isinstance(l, dict)],
+        "labels": [
+            label.get("name") for label in item.get("labels", []) if isinstance(label, dict)
+        ],
         "closed_at": item.get("closed_at"),
         "updated_at": item.get("updated_at"),
         "html_url": item.get("html_url"),
@@ -209,6 +242,12 @@ def github_fetch_issue(owner: str, repo: str, number: int) -> dict:
 @tool
 def github_fetch_pr(owner: str, repo: str, number: int) -> dict:
     """Fetch one PR from GitHub (metadata)."""
+    logger.info(
+        "github_fetch_pr owner=%s repo=%s number=%s",
+        owner,
+        repo,
+        number,
+    )
     url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{number}"
     try:
         item = _github_request_json(url)
@@ -230,6 +269,13 @@ def github_fetch_pr(owner: str, repo: str, number: int) -> dict:
 @tool
 def github_fetch_pr_files(owner: str, repo: str, number: int, max_files: int = 200) -> list[dict]:
     """Fetch PR changed files (+ per-file patch snippets when available)."""
+    logger.info(
+        "github_fetch_pr_files owner=%s repo=%s number=%s max_files=%s",
+        owner,
+        repo,
+        number,
+        max_files,
+    )
     files: list[dict] = []
     page = 1
     per_page = 100
