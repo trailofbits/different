@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
+from langgraph.cache.memory import InMemoryCache
 
 from different_agent.agents import create_inspiration_agent, create_target_agent
 from different_agent.config import AppConfig, load_config
@@ -195,6 +196,7 @@ def main() -> int:
         reasoning_effort=cfg.model.reasoning_effort,
     )
     logger.info("model resolved provider=%s name=%s", resolved.provider, resolved.name)
+    cache = InMemoryCache()
 
     inspiration_path = os.path.abspath(args.inspiration)
     target_path = os.path.abspath(args.target)
@@ -206,7 +208,7 @@ def main() -> int:
     _ensure_git_repo(inspiration_path)
     _ensure_git_repo(target_path)
 
-    extract_agent = create_inspiration_agent(resolved.model)
+    extract_agent = create_inspiration_agent(resolved.model, cache=cache)
     extract_prompt = (
         "Analyze this inspiration repository and write findings.\n\n"
         f"inspiration_repo_path: {inspiration_path}\n"
@@ -245,7 +247,7 @@ def main() -> int:
         }
     }
 
-    target_agent = create_target_agent(resolved.model)
+    target_agent = create_target_agent(resolved.model, cache=cache)
     target_prompt = (
         "Check this target repository for applicability of the findings in "
         "/inputs/findings.json.\n\n"

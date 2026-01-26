@@ -23,7 +23,11 @@ Run the full workflow (extract -> heck):
 uv sync --all-groups
 different-agent --inspiration /path/to/inspiration-repo --target /path/to/target-repo
 ```
+
+## Caching
+
+Each run uses a LangGraph in-memory cache for agent execution to reuse identical model calls within the same process. If you use an Anthropic model, Deep Agents also enables Anthropic prompt caching automatically (no extra config needed).
+
 ## GitHub (optional)
 
 If GitHub enrichment is enabled, the extractor tries to infer `{owner, repo}` from the inspiration repo’s `origin` remote and then calls the GitHub REST API to pull recent closed issues and PRs. Set `GITHUB_TOKEN` (or `GH_TOKEN`) to avoid rate limits.
-

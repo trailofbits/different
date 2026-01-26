@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from deepagents import create_deep_agent
 from langchain_core.language_models import BaseChatModel
+from langgraph.cache.base import BaseCache
 
 from different_agent.git_tools import git_grep, git_recent_commits, git_show_commit, git_show_file
 from different_agent.github_tools import (
@@ -112,7 +113,7 @@ Workflow (recommended):
 """
 
 
-def create_inspiration_agent(model: BaseChatModel):
+def create_inspiration_agent(model: BaseChatModel, cache: BaseCache | None = None):
     return create_deep_agent(
         model=model,
         tools=[
@@ -126,12 +127,14 @@ def create_inspiration_agent(model: BaseChatModel):
             github_fetch_pr_files,
         ],
         system_prompt=INSPIRATION_AGENT_PROMPT,
+        cache=cache,
     )
 
 
-def create_target_agent(model: BaseChatModel):
+def create_target_agent(model: BaseChatModel, cache: BaseCache | None = None):
     return create_deep_agent(
         model=model,
         tools=[git_grep, git_show_file],
         system_prompt=TARGET_AGENT_PROMPT,
+        cache=cache,
     )
