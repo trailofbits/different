@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+
+# Virtual envs
+.venv/
+venv/
+ENV/
+
+# Packaging/build
+build/
+dist/
+*.egg-info/
+
+# Test/coverage
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Type check / lint caches
+.mypy_cache/
+.ruff_cache/
+.pytype/
+
+# Tooling/editor/OS
+.DS_Store
+.idea/
+
+# App outputs
+outputs/
+
+# Local env files
+.env
+.env.*
+!.env.example
+
+# Agent docs (local-only)
+AGENTS.md
