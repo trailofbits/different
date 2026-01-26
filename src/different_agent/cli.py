@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
+from langchain_core.callbacks import get_usage_metadata_callback
 from langgraph.cache.memory import InMemoryCache
 
 from different_agent.agents import create_inspiration_agent, create_target_agent
@@ -67,9 +68,7 @@ def _extract_state_file(result: dict, file_path: str) -> str | None:
     return "\n".join(str(line) for line in content_lines)
 
 
-def _structured_response_to_list(
-    structured_response: Any, key: str
-) -> list[Any] | None:
+def _structured_response_to_list(structured_response: Any, key: str) -> list[Any] | None:
     if structured_response is None:
         return None
     if hasattr(structured_response, "model_dump"):
@@ -135,6 +134,76 @@ def _configure_logging() -> None:
     root_logger.handlers = [handler]
     for noisy_logger in ("langchain", "langchain_core", "httpx", "openai", "urllib3"):
         logging.getLogger(noisy_logger).setLevel(logging.WARNING)
+
+
+def _sum_usage_metadata(usage_by_model: dict[str, Any]) -> dict[str, int] | None:
+    if not usage_by_model:
+        return None
+    input_tokens = 0
+    output_tokens = 0
+    total_tokens = 0
+    for usage in usage_by_model.values():
+        if not isinstance(usage, dict):
+            continue
+        in_tokens = int(usage.get("input_tokens") or 0)
+        out_tokens = int(usage.get("output_tokens") or 0)
+        total = usage.get("total_tokens")
+        if total is None:
+            total = in_tokens + out_tokens
+        input_tokens += in_tokens
+        output_tokens += out_tokens
+        total_tokens += int(total)
+    if input_tokens == 0 and output_tokens == 0 and total_tokens == 0:
+        return None
+    return {
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": total_tokens,
+    }
+
+
+def _accumulate_cost(meta: Any, total: float) -> tuple[float, bool]:
+    if not isinstance(meta, dict):
+        return total, False
+    for key in ("total_cost", "cost", "total_cost_usd"):
+        value = meta.get(key)
+        if isinstance(value, (int, float)):
+            return total + float(value), True
+    usage = meta.get("usage") or meta.get("token_usage")
+    if isinstance(usage, dict):
+        for key in ("total_cost", "cost", "total_cost_usd"):
+            value = usage.get(key)
+            if isinstance(value, (int, float)):
+                return total + float(value), True
+    return total, False
+
+
+def _sum_cost_from_results(results: list[dict[str, Any]]) -> float | None:
+    total_cost = 0.0
+    found = False
+    for result in results:
+        for message in result.get("messages") or []:
+            meta = getattr(message, "response_metadata", None)
+            total_cost, hit = _accumulate_cost(meta, total_cost)
+            found = found or hit
+    return total_cost if found else None
+
+
+def _log_run_usage(usage_by_model: dict[str, Any], results: list[dict[str, Any]]) -> None:
+    total_cost = _sum_cost_from_results(results)
+    if total_cost is not None:
+        logger.info("Run cost: $%.6f.", total_cost)
+        return
+    usage_summary = _sum_usage_metadata(usage_by_model)
+    if usage_summary is None:
+        logger.info("Run usage: unavailable (no usage metadata returned).")
+        return
+    logger.info(
+        "Run token usage: input=%s, output=%s, total=%s.",
+        usage_summary["input_tokens"],
+        usage_summary["output_tokens"],
+        usage_summary["total_tokens"],
+    )
 
 
 def main() -> int:
@@ -226,83 +295,88 @@ def main() -> int:
     _ensure_git_repo(inspiration_path)
     _ensure_git_repo(target_path)
 
-    extract_agent = create_inspiration_agent(resolved.model, cache=cache)
-    extract_prompt = (
-        "Analyze this inspiration repository and write findings.\n\n"
-        f"inspiration_repo_path: {inspiration_path}\n"
-        f"since_days: {cfg.extract.since_days}\n"
-        f"max_commits: {cfg.extract.max_commits}\n"
-        f"max_patch_lines: {cfg.extract.max_patch_lines}\n"
-        f"include_github: {cfg.extract.include_github}\n"
-        f"max_issues: {cfg.extract.max_issues}\n"
-        f"max_prs: {cfg.extract.max_prs}\n"
-    )
-    logger.info("Invoking inspiration agent.")
-    extract_result = extract_agent.invoke(
-        {"messages": [{"role": "user", "content": extract_prompt}]}
-    )
-    logger.info("Inspiration agent finished.")
-    structured_findings = _structured_response_to_list(
-        extract_result.get("structured_response"), "findings"
-    )
-    if structured_findings is not None:
-        findings_json = json.dumps(structured_findings)
-        logger.info("Using structured response for findings.")
-    else:
-        findings_json = _extract_state_file(extract_result, "/outputs/findings.json")
-        if findings_json is None:
-            raise SystemExit("Agent did not write /outputs/findings.json")
-    findings_out_path = Path(args.findings_out)
-    _write_output_json(findings_out_path, findings_json)
-    logger.info("Wrote findings JSON to %s.", findings_out_path)
-    if cfg.reports.html:
-        findings = json.loads(findings_json)
-        if isinstance(findings, list):
-            html_path = findings_out_path.with_suffix(".html")
-            _write_output_html(html_path, render_findings_html(findings))
-            logger.info("Wrote findings HTML report to %s.", html_path)
-
-    # Provide the findings JSON to the target agent as an in-memory file.
-    # DeepAgents' StateBackend expects FileData objects (content as list of lines).
-    initial_files = {
-        "/inputs/findings.json": {
-            "content": findings_json.splitlines(),
-            "created_at": "1970-01-01T00:00:00Z",
-            "modified_at": "1970-01-01T00:00:00Z",
-        }
-    }
-
-    target_agent = create_target_agent(resolved.model, cache=cache)
-    target_prompt = (
-        "Check this target repository for applicability of the findings in "
-        "/inputs/findings.json.\n\n"
-        f"target_repo_path: {target_path}\n"
-    )
-    logger.info("Invoking target agent.")
-    target_result = target_agent.invoke(
-        {"messages": [{"role": "user", "content": target_prompt}], "files": initial_files}
-    )
-    logger.info("Target agent finished.")
-    structured_assessments = _structured_response_to_list(
-        target_result.get("structured_response"), "assessments"
-    )
-    if structured_assessments is not None:
-        assessment_json = json.dumps(structured_assessments)
-        logger.info("Using structured response for target assessment.")
-    else:
-        assessment_json = _extract_state_file(
-            target_result, "/outputs/target_assessment.json"
+    extract_result: dict[str, Any] = {}
+    target_result: dict[str, Any] = {}
+    with get_usage_metadata_callback() as usage_cb:
+        extract_agent = create_inspiration_agent(resolved.model, cache=cache)
+        extract_prompt = (
+            "Analyze this inspiration repository and write findings.\n\n"
+            f"inspiration_repo_path: {inspiration_path}\n"
+            f"since_days: {cfg.extract.since_days}\n"
+            f"max_commits: {cfg.extract.max_commits}\n"
+            f"max_patch_lines: {cfg.extract.max_patch_lines}\n"
+            f"include_github: {cfg.extract.include_github}\n"
+            f"max_issues: {cfg.extract.max_issues}\n"
+            f"max_prs: {cfg.extract.max_prs}\n"
         )
-        if assessment_json is None:
-            raise SystemExit("Agent did not write /outputs/target_assessment.json")
-    assessment_out_path = Path(args.assessment_out)
-    _write_output_json(assessment_out_path, assessment_json)
-    logger.info("Wrote target assessment JSON to %s.", assessment_out_path)
-    if cfg.reports.html:
-        assessments = json.loads(assessment_json)
-        if isinstance(assessments, list):
-            html_path = assessment_out_path.with_suffix(".html")
-            _write_output_html(html_path, render_target_assessment_html(assessments))
-            logger.info("Wrote target assessment HTML report to %s.", html_path)
+        logger.info("Invoking inspiration agent.")
+        extract_result = extract_agent.invoke(
+            {"messages": [{"role": "user", "content": extract_prompt}]}
+        )
+        logger.info("Inspiration agent finished.")
+        structured_findings = _structured_response_to_list(
+            extract_result.get("structured_response"), "findings"
+        )
+        if structured_findings is not None:
+            findings_json = json.dumps(structured_findings)
+            logger.info("Using structured response for findings.")
+        else:
+            findings_json = _extract_state_file(extract_result, "/outputs/findings.json")
+            if findings_json is None:
+                raise SystemExit("Agent did not write /outputs/findings.json")
+        findings_out_path = Path(args.findings_out)
+        _write_output_json(findings_out_path, findings_json)
+        logger.info("Wrote findings JSON to %s.", findings_out_path)
+        if cfg.reports.html:
+            findings = json.loads(findings_json)
+            if isinstance(findings, list):
+                html_path = findings_out_path.with_suffix(".html")
+                _write_output_html(html_path, render_findings_html(findings))
+                logger.info("Wrote findings HTML report to %s.", html_path)
 
+        # Provide the findings JSON to the target agent as an in-memory file.
+        # DeepAgents' StateBackend expects FileData objects (content as list of lines).
+        initial_files = {
+            "/inputs/findings.json": {
+                "content": findings_json.splitlines(),
+                "created_at": "1970-01-01T00:00:00Z",
+                "modified_at": "1970-01-01T00:00:00Z",
+            }
+        }
+
+        target_agent = create_target_agent(resolved.model, cache=cache)
+        target_prompt = (
+            "Check this target repository for applicability of the findings in "
+            "/inputs/findings.json.\n\n"
+            f"target_repo_path: {target_path}\n"
+        )
+        logger.info("Invoking target agent.")
+        target_result = target_agent.invoke(
+            {
+                "messages": [{"role": "user", "content": target_prompt}],
+                "files": initial_files,
+            }
+        )
+        logger.info("Target agent finished.")
+        structured_assessments = _structured_response_to_list(
+            target_result.get("structured_response"), "assessments"
+        )
+        if structured_assessments is not None:
+            assessment_json = json.dumps(structured_assessments)
+            logger.info("Using structured response for target assessment.")
+        else:
+            assessment_json = _extract_state_file(target_result, "/outputs/target_assessment.json")
+            if assessment_json is None:
+                raise SystemExit("Agent did not write /outputs/target_assessment.json")
+        assessment_out_path = Path(args.assessment_out)
+        _write_output_json(assessment_out_path, assessment_json)
+        logger.info("Wrote target assessment JSON to %s.", assessment_out_path)
+        if cfg.reports.html:
+            assessments = json.loads(assessment_json)
+            if isinstance(assessments, list):
+                html_path = assessment_out_path.with_suffix(".html")
+                _write_output_html(html_path, render_target_assessment_html(assessments))
+                logger.info("Wrote target assessment HTML report to %s.", html_path)
+
+    _log_run_usage(usage_cb.usage_metadata, [extract_result, target_result])
     return 0
