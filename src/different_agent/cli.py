@@ -7,7 +7,7 @@ import math
 import os
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar, cast
 
 from dotenv import load_dotenv
 from langchain_core.callbacks import get_usage_metadata_callback
@@ -24,14 +24,14 @@ logger = logging.getLogger(__name__)
 
 
 class _ColorFormatter(logging.Formatter):
-    _COLORS = {
+    _COLORS: ClassVar[dict[int, str]] = {
         logging.DEBUG: "\x1b[36m",
         logging.INFO: "\x1b[32m",
         logging.WARNING: "\x1b[33m",
         logging.ERROR: "\x1b[31m",
         logging.CRITICAL: "\x1b[35m",
     }
-    _RESET = "\x1b[0m"
+    _RESET: ClassVar[str] = "\x1b[0m"
 
     def format(self, record: logging.LogRecord) -> str:
         original_level = record.levelname
@@ -62,8 +62,7 @@ def _write_output_html(path: Path, html_content: str) -> None:
 
 
 def _output_suffix(now: datetime | None = None) -> str:
-    timestamp = (now or datetime.now()).strftime("%m-%d_%H-%M")
-    return timestamp
+    return (now or datetime.now(UTC)).strftime("%m-%d_%H-%M")
 
 
 def _output_project_name(inspiration_path: str, target_path: str | None) -> str:
@@ -131,7 +130,7 @@ def _apply_cli_overrides(cfg: AppConfig, args: argparse.Namespace) -> AppConfig:
         raw_since_date = None
     if since_days_override is None and raw_since_date is not None:
         try:
-            parsed = datetime.fromisoformat(raw_since_date.replace("Z", "+00:00"))
+            parsed = datetime.fromisoformat(raw_since_date)
         except ValueError as exc:
             raise SystemExit(
                 "Invalid since_date. Use YYYY-MM-DD or an ISO-8601 datetime like "
@@ -150,14 +149,8 @@ def _apply_cli_overrides(cfg: AppConfig, args: argparse.Namespace) -> AppConfig:
             since_days_override if since_days_override is not None else cfg.extract.since_days
         )
         effective_since_date = None
-    if from_pr_override is None:
-        from_pr = cfg.extract.from_pr
-    else:
-        from_pr = from_pr_override
-    if to_pr_override is None:
-        to_pr = cfg.extract.to_pr
-    else:
-        to_pr = to_pr_override
+    from_pr = cfg.extract.from_pr if from_pr_override is None else from_pr_override
+    to_pr = cfg.extract.to_pr if to_pr_override is None else to_pr_override
     if (from_pr is None) ^ (to_pr is None):
         raise SystemExit("--from-pr and --to-pr must be provided together.")
     if from_pr is not None and to_pr is not None:
@@ -397,8 +390,7 @@ def main() -> int:
     )
     _ensure_git_repo(inspiration_path)
     if not args.extract_only:
-        assert target_path is not None
-        _ensure_git_repo(target_path)
+        _ensure_git_repo(cast(str, target_path))
 
     output_suffix = _output_suffix()
     output_project_name = _output_project_name(inspiration_path, target_path)
@@ -463,11 +455,10 @@ def main() -> int:
             }
 
             target_agent = create_target_agent(resolved.model, cache=cache)
-            assert target_path is not None
             target_prompt = (
                 "Check this target repository for applicability of the findings in "
                 "/inputs/findings.json.\n\n"
-                f"target_repo_path: {target_path}\n"
+                f"target_repo_path: {cast(str, target_path)}\n"
             )
             logger.info("Invoking target agent.")
             target_result = target_agent.invoke(

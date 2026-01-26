@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.11"
 
 [[package]]
@@ -287,7 +287,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "pytest", specifier = ">=9.0.2" },
-    { name = "pytest-cov", specifier = ">=5.0.0" },
+    { name = "pytest-cov", specifier = ">=6.0" },
     { name = "ruff", specifier = ">=0.14.14" },
     { name = "ty", specifier = ">=0.0.13" },
 ]
@@ -297,7 +297,7 @@ lint = [
 ]
 test = [
     { name = "pytest", specifier = ">=9.0.2" },
-    { name = "pytest-cov", specifier = ">=5.0.0" },
+    { name = "pytest-cov", specifier = ">=6.0" },
 ]
 
 [[package]]

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -17,8 +18,11 @@ def _git_env() -> dict[str, str]:
 
 
 def _run_git(repo_path: Path, args: list[str]) -> None:
+    git = shutil.which("git")
+    if git is None:
+        raise RuntimeError("git not found in PATH")
     subprocess.run(
-        ["git", *args],
+        [git, *args],
         cwd=repo_path,
         check=True,
         text=True,
@@ -36,12 +40,12 @@ def init_git_repo(repo_path: Path) -> Path:
     return repo_path
 
 
-@pytest.fixture()
+@pytest.fixture
 def git_repo(tmp_path: Path) -> Path:
     return init_git_repo(tmp_path / "repo")
 
 
-@pytest.fixture()
+@pytest.fixture
 def make_git_repo(tmp_path: Path):
     def _make(name: str) -> Path:
         return init_git_repo(tmp_path / name)
@@ -58,6 +62,7 @@ def _require_skip_reason(marker: pytest.Mark, item: pytest.Item) -> None:
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    del config
     for item in items:
         for marker in item.iter_markers(name="skip"):
             _require_skip_reason(marker, item)

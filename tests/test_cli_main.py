@@ -10,7 +10,8 @@ from different_agent import cli
 
 
 class DummyUsage:
-    usage_metadata: dict = {}
+    def __init__(self) -> None:
+        self.usage_metadata: dict = {}
 
     def __enter__(self):
         return self

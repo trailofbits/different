@@ -199,7 +199,7 @@ def create_inspiration_agent(
     *,
     include_commits: bool = True,
     include_issues: bool = True,
-):
+) -> Any:
     tools = [
         git_github_repo,
         github_recent_prs,
@@ -223,7 +223,7 @@ def create_inspiration_agent(
     )
 
 
-def create_target_agent(model: BaseChatModel, cache: BaseCache | None = None):
+def create_target_agent(model: BaseChatModel, cache: BaseCache | None = None) -> Any:
     return create_deep_agent(
         model=model,
         tools=[git_grep, git_show_file],

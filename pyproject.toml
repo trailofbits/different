@@ -24,28 +24,104 @@ lint = [
 ]
 test = [
     "pytest>=9.0.2",
-    "pytest-cov>=5.0.0",
+    "pytest-cov>=6.0",
 ]
 dev = [
     { include-group = "lint" },
     { include-group = "test" },
 ]
 
+[tool.uv]
+default-groups = ["dev"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+src = ["src"]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "B", "UP"]
+select = ["ALL"]
+ignore = [
+    "D",        # pydocstyle (docstrings)
+    "C901",     # complexity warnings (refactor later)
+    "COM812",   # missing trailing comma (conflicts with formatter)
+    "ISC001",   # single-line implicit string concat (conflicts with formatter)
+    "TC",       # type-checking imports (too strict for this project)
+    "TD002",    # missing TODO author
+    "TD003",    # missing TODO link
+    "FIX002",   # line contains TODO
+    "TRY003",   # long exception messages (too strict for CLI apps)
+    "EM101",    # exception string literal (too strict)
+    "EM102",    # exception f-string (too strict)
+    "ANN401",   # Any type disallowed (sometimes necessary)
+    "PLR0915",  # too many statements (refactor later)
+    "PLR0911",  # too many return statements (acceptable for parsing)
+    "PLR0912",  # too many branches (acceptable for parsing/CLI flows)
+    "PLR0913",  # too many arguments (acceptable for tool APIs)
+    "PLR2004",  # magic value comparison (too strict)
+    "PLC0415",  # import not at top level (intentional for optional deps)
+    "PTH",      # pathlib enforcement (would require full refactor)
+    "RUF001",   # ambiguous unicode (en dash is intentional)
+    "PLW2901",  # loop variable overwritten (common pattern)
+    "S310",     # URL open audit (handled at call site)
+    "FBT",      # boolean trap (acceptable for tool APIs)
+]
 
 [tool.ruff.lint.per-file-ignores]
-"src/different_agent/agents.py" = ["E501"]
-"src/different_agent/report.py" = ["E501"]
+"tests/**/*.py" = [
+    "S101",     # assert allowed in tests
+    "S603",     # subprocess call (test helper)
+    "PLR2004",  # magic values allowed in tests
+    "ANN",      # type annotations optional in tests
+    "INP001",   # implicit namespace package
+    "SLF001",   # private member access (tests cover internal helpers)
+]
+"src/different_agent/agents.py" = [
+    "E501",     # long lines in prompt strings
+]
+"src/different_agent/report.py" = [
+    "E501",     # long lines in HTML template
+    "PERF401",  # for loop more readable than comprehension for HTML generation
+]
+"src/different_agent/git_tools.py" = [
+    "S603",     # subprocess.run with trusted git commands
+]
+"src/different_agent/github_tools.py" = [
+    "BLE001",   # broad exceptions for robust API wrappers
+]
+"src/different_agent/config.py" = [
+    "TRY004",   # ValueError is appropriate for config parsing
+    "FBT001",   # boolean default args in config helpers
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov=different_agent --cov-report=term-missing --cov-fail-under=80"
+pythonpath = ["src"]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--cov=different_agent",
+    "--cov-report=term-missing",
+    "--cov-fail-under=80",
+]
 filterwarnings = ["error"]
+
+[tool.coverage.run]
+branch = true
+source = ["src/different_agent"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]
 
 [tool.ty.environment]
 python-version = "3.11"

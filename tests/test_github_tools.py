@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import urllib.error
+import urllib.request
 
 import pytest
 
@@ -31,8 +32,8 @@ def test_git_github_repo_success(monkeypatch: pytest.MonkeyPatch) -> None:
     class DummyResult:
         stdout = "git@github.com:acme/widgets.git"
 
-    monkeypatch.setattr(gh, "_run_git", lambda repo_path, args: DummyResult)
-    assert gh.git_github_repo.invoke({"repo_path": "/tmp/repo"}) == {
+    monkeypatch.setattr(gh, "_run_git", lambda _repo_path, _args: DummyResult)
+    assert gh.git_github_repo.invoke({"repo_path": "/home/test/repo"}) == {
         "owner": "acme",
         "repo": "widgets",
     }
@@ -43,7 +44,7 @@ def test_git_github_repo_error(monkeypatch: pytest.MonkeyPatch) -> None:
         raise RuntimeError("no remote")
 
     monkeypatch.setattr(gh, "_run_git", boom)
-    result = gh.git_github_repo.invoke({"repo_path": "/tmp/repo"})
+    result = gh.git_github_repo.invoke({"repo_path": "/home/test/repo"})
     assert "error" in result
 
 
@@ -124,3 +125,159 @@ def test_github_recent_prs_skips_not_found(monkeypatch: pytest.MonkeyPatch) -> N
         {"owner": "acme", "repo": "widgets", "from_pr": 1, "to_pr": 1}
     )
     assert results == []
+
+
+def test_github_request_json_sets_auth_header_and_parses_json(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GH_TOKEN", "fake-token")
+
+    seen: dict[str, object] = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return b'{"ok": true}'
+
+    def fake_urlopen(req: urllib.request.Request, timeout: int):  # noqa: ARG001
+        seen["auth"] = req.headers.get("Authorization")
+        return FakeResponse()
+
+    monkeypatch.setattr(gh.urllib.request, "urlopen", fake_urlopen)
+    assert gh._github_request_json("https://api.github.com/test") == {"ok": True}
+    assert seen["auth"] == "Bearer fake-token"
+
+
+def test_record_analyzed_pr_ignores_invalid_inputs() -> None:
+    gh.reset_analyzed_pr_count()
+    gh._record_analyzed_pr(None, "repo", 1)
+    gh._record_analyzed_pr("owner", "", 1)
+    gh._record_analyzed_pr("owner", "repo", None)
+    assert gh.get_analyzed_pr_count() == 0
+
+
+def test_parse_github_repo_from_remote_empty() -> None:
+    assert gh._parse_github_repo_from_remote("   ") is None
+
+
+def test_git_github_repo_parse_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    class DummyResult:
+        stdout = "https://gitlab.com/acme/widgets"
+
+    monkeypatch.setattr(gh, "_run_git", lambda _repo_path, _args: DummyResult)
+    result = gh.git_github_repo.invoke({"repo_path": "/home/test/repo"})
+    assert "error" in result
+
+
+def test_github_recent_prs_non_range_filters_by_since_days(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_request(_url: str) -> list[dict]:
+        return [
+            {
+                "number": 1,
+                "title": "Old PR",
+                "state": "closed",
+                "merged_at": None,
+                "updated_at": "1970-01-01T00:00:00Z",
+                "html_url": "https://example.com/1",
+            },
+            {
+                "number": 2,
+                "title": "New PR",
+                "state": "closed",
+                "merged_at": None,
+                "updated_at": "2999-01-01T00:00:00Z",
+                "html_url": "https://example.com/2",
+            },
+            {
+                "number": 3,
+                "title": "No date",
+                "state": "closed",
+                "merged_at": None,
+                "updated_at": None,
+                "html_url": "https://example.com/3",
+            },
+        ]
+
+    gh.reset_analyzed_pr_count()
+    monkeypatch.setattr(gh, "_github_request_json", fake_request)
+    results = gh.github_recent_prs.invoke(
+        {"owner": "acme", "repo": "widgets", "since_days": 1, "max_count": 10}
+    )
+    assert [item["number"] for item in results] == [2, 3]
+    assert gh.get_analyzed_pr_count() == 2
+
+
+def test_github_recent_issues_error_non_list(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(gh, "_github_request_json", lambda _url: {"nope": True})
+    results = gh.github_recent_issues.invoke({"owner": "acme", "repo": "widgets"})
+    assert results[0]["error"] == "Unexpected response from GitHub issues API"
+
+
+def test_github_recent_issues_error_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+    def boom(_url: str):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(gh, "_github_request_json", boom)
+    results = gh.github_recent_issues.invoke({"owner": "acme", "repo": "widgets"})
+    assert "error" in results[0]
+
+
+def test_github_fetch_issue_success_and_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def ok(_url: str) -> dict:
+        return {
+            "number": 123,
+            "title": "Issue",
+            "state": "closed",
+            "labels": [{"name": "bug"}],
+            "closed_at": None,
+            "updated_at": None,
+            "html_url": "https://example.com",
+            "body": "x" * 13000,
+        }
+
+    monkeypatch.setattr(gh, "_github_request_json", ok)
+    issue = gh.github_fetch_issue.invoke({"owner": "acme", "repo": "widgets", "number": 123})
+    assert issue["number"] == 123
+    assert issue["labels"] == ["bug"]
+    assert len(issue["body"]) == 12000
+
+    monkeypatch.setattr(gh, "_github_request_json", lambda _url: ["nope"])
+    error = gh.github_fetch_issue.invoke({"owner": "acme", "repo": "widgets", "number": 1})
+    assert "error" in error
+
+
+def test_github_fetch_pr_success_and_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        gh,
+        "_github_request_json",
+        lambda _url: {
+            "number": 12,
+            "title": "PR",
+            "state": "closed",
+            "merged_at": None,
+            "updated_at": None,
+            "html_url": "https://example.com",
+            "body": "x" * 13000,
+        },
+    )
+    pr = gh.github_fetch_pr.invoke({"owner": "acme", "repo": "widgets", "number": 12})
+    assert pr["number"] == 12
+    assert len(pr["body"]) == 12000
+
+    monkeypatch.setattr(gh, "_github_request_json", lambda _url: ["nope"])
+    error = gh.github_fetch_pr.invoke({"owner": "acme", "repo": "widgets", "number": 12})
+    assert "error" in error
+
+
+def test_github_fetch_pr_files_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def boom(_url: str):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(gh, "_github_request_json", boom)
+    results = gh.github_fetch_pr_files.invoke({"owner": "acme", "repo": "widgets", "number": 12})
+    assert "error" in results[0]

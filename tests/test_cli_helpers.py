@@ -11,11 +11,11 @@ from different_agent.config import AppConfig, ExtractConfig, ModelConfig, Report
 
 
 def test_output_helpers() -> None:
-    fixed = datetime(2024, 1, 2, 3, 4)
+    fixed = datetime(2024, 1, 2, 3, 4, tzinfo=UTC)
     assert cli._output_suffix(fixed) == "01-02_03-04"
 
-    assert cli._output_project_name("/tmp/inspiration", None) == "inspiration"
-    assert cli._output_project_name("/tmp/inspiration", "/tmp/target") == "target"
+    assert cli._output_project_name("/home/test/inspiration", None) == "inspiration"
+    assert cli._output_project_name("/home/test/inspiration", "/home/test/target") == "target"
     assert cli._output_project_name("/", None) == "project"
 
     base = Path("outputs/findings.json")
@@ -61,7 +61,7 @@ def test_apply_cli_overrides_with_since_date(monkeypatch: pytest.MonkeyPatch) ->
 
     class FixedDateTime(datetime):
         @classmethod
-        def now(cls, tz=None):
+        def now(cls, _tz=None):
             return fixed_now
 
     monkeypatch.setattr(cli, "datetime", FixedDateTime)

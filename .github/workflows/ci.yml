@@ -20,10 +20,16 @@ jobs:
         run: uv sync --all-groups --frozen
 
       - name: Ruff lint
-        run: uv run ruff check .
+        run: uv run ruff check --output-format=github .
 
       - name: Ty type check
         run: uv run ty check src/
 
       - name: Pytest
-        run: uv run pytest
+        run: uv run pytest --cov-report=xml
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false

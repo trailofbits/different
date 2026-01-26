@@ -59,8 +59,7 @@ def _github_request_json(url: str) -> Any:
         headers["Authorization"] = f"Bearer {token}"
 
     req = urllib.request.Request(url, headers=headers)
-    # S310: URL is built from GitHub API base; no user-controlled host/scheme.
-    with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
+    with urllib.request.urlopen(req, timeout=30) as resp:
         payload = resp.read().decode("utf-8")
         return json.loads(payload)
 
@@ -253,7 +252,7 @@ def github_recent_prs(
         date_str = merged_at or updated_at
         if isinstance(date_str, str):
             try:
-                dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+                dt = datetime.fromisoformat(date_str)
             except ValueError:
                 dt = None
             if dt is not None and dt < threshold:
