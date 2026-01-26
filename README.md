@@ -2,10 +2,10 @@
 
 Different Agent is a small agentic app built with Deep Agents (LangGraph). It does two things:
 
-- First, it looks at an “inspiration” local Git repository and tries to extract recent bug fixes and security fixes. It outputs a structured JSON file with one entry per fix.
+- First, it looks at an “inspiration” local Git repository and tries to extract recent bug fixes and security fixes, skipping docs/formatting/test/refactor-only commits unless the diff shows an actual bug fix. It outputs a structured JSON file with one entry per fix, including idea-level root causes and tags so matching can be flexible.
 - Then, it takes that JSON and checks a “target” local Git repository to see if the same problems likely apply there. It outputs another JSON file with one entry per finding.
 
-The logic is agentic: an LLM calls local Git tools (and optional GitHub API tools) in a loop to inspect commits, diffs, and related PR/issue context.
+The logic is agentic: an LLM calls local Git tools (and optional GitHub API tools) in a loop to inspect commits, diffs, and related PR/issue context. The target assessment agent now follows a security-judge style and appends a clear verdict to each assessment's `why` field.
 
 ## Requirements
 
@@ -28,6 +28,6 @@ different-agent --inspiration /path/to/inspiration-repo --target /path/to/target
 
 Each run uses a LangGraph in-memory cache for agent execution to reuse identical model calls within the same process. If you use an Anthropic model, Deep Agents also enables Anthropic prompt caching automatically (no extra config needed).
 
-## GitHub (optional)
+## Structured output
 
-If GitHub enrichment is enabled, the extractor tries to infer `{owner, repo}` from the inspiration repo’s `origin` remote and then calls the GitHub REST API to pull recent closed issues and PRs. Set `GITHUB_TOKEN` (or `GH_TOKEN`) to avoid rate limits.
+The agents use `response_format` to return structured findings/assessments. The CLI prefers this structured response when writing JSON outputs, and falls back to the agent-written `/outputs/*.json` files if needed.

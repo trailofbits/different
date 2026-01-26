@@ -16,6 +16,7 @@ from different_agent.git_tools import _run_git
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass(frozen=True)
 class GitHubRepo:
     owner: str

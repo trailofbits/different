@@ -5,6 +5,7 @@ import json
 import logging
 import os
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
 from langgraph.cache.memory import InMemoryCache
@@ -64,6 +65,25 @@ def _extract_state_file(result: dict, file_path: str) -> str | None:
     if not isinstance(content_lines, list):
         return None
     return "\n".join(str(line) for line in content_lines)
+
+
+def _structured_response_to_list(
+    structured_response: Any, key: str
+) -> list[Any] | None:
+    if structured_response is None:
+        return None
+    if hasattr(structured_response, "model_dump"):
+        data = structured_response.model_dump()
+    elif hasattr(structured_response, "dict"):
+        data = structured_response.dict()
+    else:
+        data = structured_response
+    if isinstance(data, dict):
+        value = data.get(key)
+        if isinstance(value, list):
+            return value
+        return None
+    return None
 
 
 def _default_config_path(cli_value: str | None) -> Path:
@@ -143,9 +163,7 @@ def main() -> int:
         required=True,
         help="Path to target git repo",
     )
-    parser.add_argument(
-        "--since-days", type=int, default=None, help="Override extract.since_days"
-    )
+    parser.add_argument("--since-days", type=int, default=None, help="Override extract.since_days")
     parser.add_argument(
         "--max-commits", type=int, default=None, help="Override extract.max_commits"
     )
@@ -224,9 +242,16 @@ def main() -> int:
         {"messages": [{"role": "user", "content": extract_prompt}]}
     )
     logger.info("inspiration agent finished")
-    findings_json = _extract_state_file(extract_result, "/outputs/findings.json")
-    if findings_json is None:
-        raise SystemExit("Agent did not write /outputs/findings.json")
+    structured_findings = _structured_response_to_list(
+        extract_result.get("structured_response"), "findings"
+    )
+    if structured_findings is not None:
+        findings_json = json.dumps(structured_findings)
+        logger.info("using structured_response for findings")
+    else:
+        findings_json = _extract_state_file(extract_result, "/outputs/findings.json")
+        if findings_json is None:
+            raise SystemExit("Agent did not write /outputs/findings.json")
     findings_out_path = Path(args.findings_out)
     _write_output_json(findings_out_path, findings_json)
     logger.info("wrote findings json path=%s", findings_out_path)
@@ -258,9 +283,18 @@ def main() -> int:
         {"messages": [{"role": "user", "content": target_prompt}], "files": initial_files}
     )
     logger.info("target agent finished")
-    assessment_json = _extract_state_file(target_result, "/outputs/target_assessment.json")
-    if assessment_json is None:
-        raise SystemExit("Agent did not write /outputs/target_assessment.json")
+    structured_assessments = _structured_response_to_list(
+        target_result.get("structured_response"), "assessments"
+    )
+    if structured_assessments is not None:
+        assessment_json = json.dumps(structured_assessments)
+        logger.info("using structured_response for target assessment")
+    else:
+        assessment_json = _extract_state_file(
+            target_result, "/outputs/target_assessment.json"
+        )
+        if assessment_json is None:
+            raise SystemExit("Agent did not write /outputs/target_assessment.json")
     assessment_out_path = Path(args.assessment_out)
     _write_output_json(assessment_out_path, assessment_json)
     logger.info("wrote target assessment json path=%s", assessment_out_path)

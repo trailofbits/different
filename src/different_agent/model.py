@@ -8,6 +8,7 @@ from langchain_core.language_models import BaseChatModel
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass(frozen=True)
 class ResolvedModel:
     model: BaseChatModel
