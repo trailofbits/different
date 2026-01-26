@@ -16,6 +16,27 @@ from different_agent.report import render_findings_html, render_target_assessmen
 logger = logging.getLogger(__name__)
 
 
+class _ColorFormatter(logging.Formatter):
+    _COLORS = {
+        logging.DEBUG: "\x1b[36m",
+        logging.INFO: "\x1b[32m",
+        logging.WARNING: "\x1b[33m",
+        logging.ERROR: "\x1b[31m",
+        logging.CRITICAL: "\x1b[35m",
+    }
+    _RESET = "\x1b[0m"
+
+    def format(self, record: logging.LogRecord) -> str:
+        original_level = record.levelname
+        color = self._COLORS.get(record.levelno)
+        if color:
+            record.levelname = f"{color}{original_level}{self._RESET}"
+        try:
+            return super().format(record)
+        finally:
+            record.levelname = original_level
+
+
 def _ensure_git_repo(path: str) -> None:
     git_dir = os.path.join(path, ".git")
     if not os.path.isdir(git_dir):
@@ -81,11 +102,16 @@ def _apply_cli_overrides(cfg: AppConfig, args: argparse.Namespace) -> AppConfig:
 
 
 def _configure_logging() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
+    handler = logging.StreamHandler()
+    handler.setFormatter(
+        _ColorFormatter(
+            "%(asctime)s %(levelname)s %(name)s: %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
     )
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    root_logger.handlers = [handler]
     for noisy_logger in ("langchain", "langchain_core", "httpx", "openai", "urllib3"):
         logging.getLogger(noisy_logger).setLevel(logging.WARNING)
 
@@ -106,31 +132,37 @@ def main() -> int:
         default=None,
         help="Model name to use (overrides config). Example: gpt-5.2 or claude-sonnet-4-5-20250929",
     )
-    sub = parser.add_subparsers(dest="cmd", required=True)
-
-    extract_p = sub.add_parser("extract", help="Extract findings from an inspiration repo")
-    extract_p.add_argument("--inspiration", required=True, help="Path to inspiration git repo")
-    extract_p.add_argument(
+    parser.add_argument(
+        "--inspiration",
+        required=True,
+        help="Path to inspiration git repo",
+    )
+    parser.add_argument(
+        "--target",
+        required=True,
+        help="Path to target git repo",
+    )
+    parser.add_argument(
         "--since-days", type=int, default=None, help="Override extract.since_days"
     )
-    extract_p.add_argument(
+    parser.add_argument(
         "--max-commits", type=int, default=None, help="Override extract.max_commits"
     )
-    extract_p.add_argument(
+    parser.add_argument(
         "--max-patch-lines", type=int, default=None, help="Override extract.max_patch_lines"
     )
-    extract_p.add_argument("--out", default="outputs/findings.json")
-
-    check_p = sub.add_parser("check", help="Check a target repo against existing findings")
-    check_p.add_argument("--target", required=True, help="Path to target git repo")
-    check_p.add_argument(
-        "--findings", required=True, help="Path to findings.json produced by extract"
+    parser.add_argument(
+        "--findings-out",
+        default="outputs/findings.json",
+        help="Output path for extracted findings JSON",
     )
-    check_p.add_argument("--out", default="outputs/target_assessment.json")
+    parser.add_argument(
+        "--assessment-out",
+        default="outputs/target_assessment.json",
+        help="Output path for target assessment JSON",
+    )
 
     args = parser.parse_args()
-    logger.info("command=%s", args.cmd)
-
     cfg_path = _default_config_path(args.config)
     logger.info("loading config path=%s", cfg_path)
     cfg = load_config(cfg_path)
@@ -164,82 +196,77 @@ def main() -> int:
     )
     logger.info("model resolved provider=%s name=%s", resolved.provider, resolved.name)
 
-    if args.cmd == "extract":
-        inspiration_path = os.path.abspath(args.inspiration)
-        logger.info("extract start inspiration_path=%s", inspiration_path)
-        _ensure_git_repo(inspiration_path)
-        agent = create_inspiration_agent(resolved.model)
-        prompt = (
-            "Analyze this inspiration repository and write findings.\n\n"
-            f"inspiration_repo_path: {inspiration_path}\n"
-            f"since_days: {cfg.extract.since_days}\n"
-            f"max_commits: {cfg.extract.max_commits}\n"
-            f"max_patch_lines: {cfg.extract.max_patch_lines}\n"
-            f"include_github: {cfg.extract.include_github}\n"
-            f"max_issues: {cfg.extract.max_issues}\n"
-            f"max_prs: {cfg.extract.max_prs}\n"
-        )
-        logger.info("invoking inspiration agent")
-        result = agent.invoke({"messages": [{"role": "user", "content": prompt}]})
-        logger.info("inspiration agent finished")
-        findings_json = _extract_state_file(result, "/outputs/findings.json")
-        if findings_json is None:
-            raise SystemExit("Agent did not write /outputs/findings.json")
-        out_path = Path(args.out)
-        _write_output_json(out_path, findings_json)
-        logger.info("wrote findings json path=%s", out_path)
-        if cfg.reports.html:
-            findings = json.loads(out_path.read_text(encoding="utf-8"))
-            if isinstance(findings, list):
-                html_path = out_path.with_suffix(".html")
-                _write_output_html(html_path, render_findings_html(findings))
-                logger.info("wrote findings html path=%s", html_path)
-        return 0
+    inspiration_path = os.path.abspath(args.inspiration)
+    target_path = os.path.abspath(args.target)
+    logger.info(
+        "run start inspiration_path=%s target_path=%s",
+        inspiration_path,
+        target_path,
+    )
+    _ensure_git_repo(inspiration_path)
+    _ensure_git_repo(target_path)
 
-    if args.cmd == "check":
-        target_path = os.path.abspath(args.target)
-        logger.info(
-            "check start target_path=%s findings_path=%s",
-            target_path,
-            args.findings,
-        )
-        _ensure_git_repo(target_path)
-        findings_path = Path(args.findings)
-        findings_content = findings_path.read_text(encoding="utf-8")
+    extract_agent = create_inspiration_agent(resolved.model)
+    extract_prompt = (
+        "Analyze this inspiration repository and write findings.\n\n"
+        f"inspiration_repo_path: {inspiration_path}\n"
+        f"since_days: {cfg.extract.since_days}\n"
+        f"max_commits: {cfg.extract.max_commits}\n"
+        f"max_patch_lines: {cfg.extract.max_patch_lines}\n"
+        f"include_github: {cfg.extract.include_github}\n"
+        f"max_issues: {cfg.extract.max_issues}\n"
+        f"max_prs: {cfg.extract.max_prs}\n"
+    )
+    logger.info("invoking inspiration agent")
+    extract_result = extract_agent.invoke(
+        {"messages": [{"role": "user", "content": extract_prompt}]}
+    )
+    logger.info("inspiration agent finished")
+    findings_json = _extract_state_file(extract_result, "/outputs/findings.json")
+    if findings_json is None:
+        raise SystemExit("Agent did not write /outputs/findings.json")
+    findings_out_path = Path(args.findings_out)
+    _write_output_json(findings_out_path, findings_json)
+    logger.info("wrote findings json path=%s", findings_out_path)
+    if cfg.reports.html:
+        findings = json.loads(findings_json)
+        if isinstance(findings, list):
+            html_path = findings_out_path.with_suffix(".html")
+            _write_output_html(html_path, render_findings_html(findings))
+            logger.info("wrote findings html path=%s", html_path)
 
-        # Provide the findings JSON to the agent as an in-memory file.
-        # DeepAgents' StateBackend expects FileData objects (content as list of lines).
-        initial_files = {
-            "/inputs/findings.json": {
-                "content": findings_content.splitlines(),
-                "created_at": "1970-01-01T00:00:00Z",
-                "modified_at": "1970-01-01T00:00:00Z",
-            }
+    # Provide the findings JSON to the target agent as an in-memory file.
+    # DeepAgents' StateBackend expects FileData objects (content as list of lines).
+    initial_files = {
+        "/inputs/findings.json": {
+            "content": findings_json.splitlines(),
+            "created_at": "1970-01-01T00:00:00Z",
+            "modified_at": "1970-01-01T00:00:00Z",
         }
+    }
 
-        agent = create_target_agent(resolved.model)
-        prompt = (
-            "Check this target repository for applicability of the findings in "
-            "/inputs/findings.json.\n\n"
-            f"target_repo_path: {target_path}\n"
-        )
-        logger.info("invoking target agent")
-        result = agent.invoke(
-            {"messages": [{"role": "user", "content": prompt}], "files": initial_files}
-        )
-        logger.info("target agent finished")
-        assessment_json = _extract_state_file(result, "/outputs/target_assessment.json")
-        if assessment_json is None:
-            raise SystemExit("Agent did not write /outputs/target_assessment.json")
-        out_path = Path(args.out)
-        _write_output_json(out_path, assessment_json)
-        logger.info("wrote target assessment json path=%s", out_path)
-        if cfg.reports.html:
-            assessments = json.loads(out_path.read_text(encoding="utf-8"))
-            if isinstance(assessments, list):
-                html_path = out_path.with_suffix(".html")
-                _write_output_html(html_path, render_target_assessment_html(assessments))
-                logger.info("wrote target assessment html path=%s", html_path)
-        return 0
+    target_agent = create_target_agent(resolved.model)
+    target_prompt = (
+        "Check this target repository for applicability of the findings in "
+        "/inputs/findings.json.\n\n"
+        f"target_repo_path: {target_path}\n"
+    )
+    logger.info("invoking target agent")
+    target_result = target_agent.invoke(
+        {"messages": [{"role": "user", "content": target_prompt}], "files": initial_files}
+    )
+    logger.info("target agent finished")
+    assessment_json = _extract_state_file(target_result, "/outputs/target_assessment.json")
+    if assessment_json is None:
+        raise SystemExit("Agent did not write /outputs/target_assessment.json")
+    assessment_out_path = Path(args.assessment_out)
+    _write_output_json(assessment_out_path, assessment_json)
+    logger.info("wrote target assessment json path=%s", assessment_out_path)
+    if cfg.reports.html:
+        assessments = json.loads(assessment_json)
+        if isinstance(assessments, list):
+            html_path = assessment_out_path.with_suffix(".html")
+            _write_output_html(html_path, render_target_assessment_html(assessments))
+            logger.info("wrote target assessment html path=%s", html_path)
 
-    raise SystemExit(f"Unknown command: {args.cmd}")
+    return 0

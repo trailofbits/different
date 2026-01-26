@@ -28,23 +28,27 @@ Install (recommended):
 uv sync --all-groups
 ```
 
-Extract findings from an inspiration repo:
+Run the full workflow (extract → check):
 
 ```bash
-different-agent extract --inspiration /path/to/inspiration-repo --out outputs/findings.json
+different-agent --inspiration /path/to/inspiration-repo --target /path/to/target-repo
 ```
 
-Check a target repo against those findings:
+Override output paths:
 
 ```bash
-different-agent check --target /path/to/target-repo --findings outputs/findings.json --out outputs/target_assessment.json
+different-agent \
+  --inspiration /path/to/inspiration-repo \
+  --target /path/to/target-repo \
+  --findings-out outputs/findings.json \
+  --assessment-out outputs/target_assessment.json
 ```
 
 If `reports.html=true` in `different.toml`, the CLI also writes `outputs/findings.html` and `outputs/target_assessment.html`.
 
 ## Logging
 
-The CLI writes INFO-level progress logs to stderr so you can follow startup, config, agent runs, tool calls, and output writes.
+The CLI writes INFO-level progress logs to stderr so you can follow startup, config, agent runs, tool calls, and output writes. Log levels are ANSI color-coded.
 
 ## GitHub (optional)
 
