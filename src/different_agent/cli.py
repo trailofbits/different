@@ -229,8 +229,13 @@ def main() -> int:
     )
     parser.add_argument(
         "--target",
-        required=True,
-        help="Path to target git repo",
+        required=False,
+        help="Path to target git repo (required unless --extract-only)",
+    )
+    parser.add_argument(
+        "--extract-only",
+        action="store_true",
+        help="Only extract findings from the inspiration repo; skip target analysis",
     )
     parser.add_argument("--since-days", type=int, default=None, help="Override extract.since_days")
     parser.add_argument(
@@ -251,6 +256,10 @@ def main() -> int:
     )
 
     args = parser.parse_args()
+    if not args.extract_only and not args.target:
+        parser.error("--target is required unless --extract-only is set")
+    if args.extract_only:
+        logger.info("Extract-only enabled: skipping target analysis.")
     cfg_path = _default_config_path(args.config)
     logger.info("Loading config from %s.", cfg_path)
     cfg = load_config(cfg_path)
@@ -286,14 +295,16 @@ def main() -> int:
     cache = InMemoryCache()
 
     inspiration_path = os.path.abspath(args.inspiration)
-    target_path = os.path.abspath(args.target)
+    target_path = os.path.abspath(args.target) if args.target else None
     logger.info(
         "Run starting. Inspiration repo: %s. Target repo: %s.",
         inspiration_path,
-        target_path,
+        target_path or "(skipped)",
     )
     _ensure_git_repo(inspiration_path)
-    _ensure_git_repo(target_path)
+    if not args.extract_only:
+        assert target_path is not None
+        _ensure_git_repo(target_path)
 
     extract_result: dict[str, Any] = {}
     target_result: dict[str, Any] = {}
@@ -334,49 +345,56 @@ def main() -> int:
                 _write_output_html(html_path, render_findings_html(findings))
                 logger.info("Wrote findings HTML report to %s.", html_path)
 
-        # Provide the findings JSON to the target agent as an in-memory file.
-        # DeepAgents' StateBackend expects FileData objects (content as list of lines).
-        initial_files = {
-            "/inputs/findings.json": {
-                "content": findings_json.splitlines(),
-                "created_at": "1970-01-01T00:00:00Z",
-                "modified_at": "1970-01-01T00:00:00Z",
+        if not args.extract_only:
+            # Provide the findings JSON to the target agent as an in-memory file.
+            # DeepAgents' StateBackend expects FileData objects (content as list of lines).
+            initial_files = {
+                "/inputs/findings.json": {
+                    "content": findings_json.splitlines(),
+                    "created_at": "1970-01-01T00:00:00Z",
+                    "modified_at": "1970-01-01T00:00:00Z",
+                }
             }
-        }
 
-        target_agent = create_target_agent(resolved.model, cache=cache)
-        target_prompt = (
-            "Check this target repository for applicability of the findings in "
-            "/inputs/findings.json.\n\n"
-            f"target_repo_path: {target_path}\n"
-        )
-        logger.info("Invoking target agent.")
-        target_result = target_agent.invoke(
-            {
-                "messages": [{"role": "user", "content": target_prompt}],
-                "files": initial_files,
-            }
-        )
-        logger.info("Target agent finished.")
-        structured_assessments = _structured_response_to_list(
-            target_result.get("structured_response"), "assessments"
-        )
-        if structured_assessments is not None:
-            assessment_json = json.dumps(structured_assessments)
-            logger.info("Using structured response for target assessment.")
-        else:
-            assessment_json = _extract_state_file(target_result, "/outputs/target_assessment.json")
-            if assessment_json is None:
-                raise SystemExit("Agent did not write /outputs/target_assessment.json")
-        assessment_out_path = Path(args.assessment_out)
-        _write_output_json(assessment_out_path, assessment_json)
-        logger.info("Wrote target assessment JSON to %s.", assessment_out_path)
-        if cfg.reports.html:
-            assessments = json.loads(assessment_json)
-            if isinstance(assessments, list):
-                html_path = assessment_out_path.with_suffix(".html")
-                _write_output_html(html_path, render_target_assessment_html(assessments))
-                logger.info("Wrote target assessment HTML report to %s.", html_path)
+            target_agent = create_target_agent(resolved.model, cache=cache)
+            assert target_path is not None
+            target_prompt = (
+                "Check this target repository for applicability of the findings in "
+                "/inputs/findings.json.\n\n"
+                f"target_repo_path: {target_path}\n"
+            )
+            logger.info("Invoking target agent.")
+            target_result = target_agent.invoke(
+                {
+                    "messages": [{"role": "user", "content": target_prompt}],
+                    "files": initial_files,
+                }
+            )
+            logger.info("Target agent finished.")
+            structured_assessments = _structured_response_to_list(
+                target_result.get("structured_response"), "assessments"
+            )
+            if structured_assessments is not None:
+                assessment_json = json.dumps(structured_assessments)
+                logger.info("Using structured response for target assessment.")
+            else:
+                assessment_json = _extract_state_file(
+                    target_result, "/outputs/target_assessment.json"
+                )
+                if assessment_json is None:
+                    raise SystemExit("Agent did not write /outputs/target_assessment.json")
+            assessment_out_path = Path(args.assessment_out)
+            _write_output_json(assessment_out_path, assessment_json)
+            logger.info("Wrote target assessment JSON to %s.", assessment_out_path)
+            if cfg.reports.html:
+                assessments = json.loads(assessment_json)
+                if isinstance(assessments, list):
+                    html_path = assessment_out_path.with_suffix(".html")
+                    _write_output_html(html_path, render_target_assessment_html(assessments))
+                    logger.info("Wrote target assessment HTML report to %s.", html_path)
 
-    _log_run_usage(usage_cb.usage_metadata, [extract_result, target_result])
+    results = [extract_result]
+    if not args.extract_only:
+        results.append(target_result)
+    _log_run_usage(usage_cb.usage_metadata, results)
     return 0

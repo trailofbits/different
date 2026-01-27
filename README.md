@@ -25,4 +25,11 @@ Run the full workflow (extract -> check):
 uv sync --all-groups
 different-agent --inspiration /path/to/inspiration-repo --target /path/to/target-repo
 ```
+
+Run extraction only (skip target analysis):
+
+```bash
+uv sync --all-groups
+different-agent --inspiration /path/to/inspiration-repo --extract-only
+```
  
