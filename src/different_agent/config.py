@@ -15,6 +15,7 @@ class ModelConfig:
 
 @dataclass(frozen=True)
 class ExtractConfig:
+    since_date: str | None = None
     since_days: int = 30
     max_commits: int = 50
     max_patch_lines: int = 400
@@ -48,6 +49,15 @@ def _get_str(table: dict[str, Any], key: str, default: str) -> str:
     value = table.get(key, default)
     if not isinstance(value, str):
         raise ValueError(f"Config value must be a string: {key}")
+    return value
+
+
+def _get_optional_str(table: dict[str, Any], key: str, default: str | None) -> str | None:
+    value = table.get(key, default)
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError(f"Config value must be a string or null: {key}")
     return value
 
 
@@ -99,6 +109,7 @@ def load_config(path: Path) -> AppConfig:
         raise ValueError("Config value must be a string or null: model.reasoning_effort")
 
     extract = ExtractConfig(
+        since_date=_get_optional_str(extract_raw, "since_date", ExtractConfig.since_date),
         since_days=_get_int(extract_raw, "since_days", ExtractConfig.since_days),
         max_commits=_get_int(extract_raw, "max_commits", ExtractConfig.max_commits),
         max_patch_lines=_get_int(extract_raw, "max_patch_lines", ExtractConfig.max_patch_lines),

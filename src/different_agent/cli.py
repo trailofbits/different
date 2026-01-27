@@ -3,7 +3,9 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import math
 import os
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -97,7 +99,36 @@ def _default_config_path(cli_value: str | None) -> Path:
 def _apply_cli_overrides(cfg: AppConfig, args: argparse.Namespace) -> AppConfig:
     model_name = args.model or cfg.model.name
     # Model provider/reasoning live in config; --model is the only per-run override requested.
-    since_days = getattr(args, "since_days", None)
+    since_days_override = getattr(args, "since_days", None)
+    since_date_override = getattr(args, "since_date", None)
+    if since_date_override is not None:
+        raw_since_date = since_date_override
+        since_days_override = None
+    elif since_days_override is None:
+        raw_since_date = cfg.extract.since_date
+    else:
+        raw_since_date = None
+    if since_days_override is None and raw_since_date is not None:
+        try:
+            parsed = datetime.fromisoformat(raw_since_date.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise SystemExit(
+                "Invalid since_date. Use YYYY-MM-DD or an ISO-8601 datetime like "
+                "2024-01-01T00:00:00Z."
+            ) from exc
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=UTC)
+        now = datetime.now(UTC)
+        if parsed > now:
+            raise SystemExit("since_date must be in the past.")
+        delta_seconds = (now - parsed).total_seconds()
+        since_days = max(1, math.ceil(delta_seconds / 86400))
+        effective_since_date = raw_since_date
+    else:
+        since_days = (
+            since_days_override if since_days_override is not None else cfg.extract.since_days
+        )
+        effective_since_date = None
     max_commits = getattr(args, "max_commits", None)
     max_patch_lines = getattr(args, "max_patch_lines", None)
     return AppConfig(
@@ -108,6 +139,7 @@ def _apply_cli_overrides(cfg: AppConfig, args: argparse.Namespace) -> AppConfig:
             temperature=cfg.model.temperature,
         ),
         extract=cfg.extract.__class__(
+            since_date=effective_since_date,
             since_days=since_days if since_days is not None else cfg.extract.since_days,
             max_commits=max_commits if max_commits is not None else cfg.extract.max_commits,
             max_patch_lines=max_patch_lines
@@ -239,6 +271,11 @@ def main() -> int:
     )
     parser.add_argument("--since-days", type=int, default=None, help="Override extract.since_days")
     parser.add_argument(
+        "--since-date",
+        default=None,
+        help="Override extract.since_date (YYYY-MM-DD or ISO-8601). Overrides since_days.",
+    )
+    parser.add_argument(
         "--max-commits", type=int, default=None, help="Override extract.max_commits"
     )
     parser.add_argument(
@@ -272,7 +309,9 @@ def main() -> int:
         cfg.model.temperature,
     )
     logger.info(
-        "Extractor settings: since_days=%s, max_commits=%s, max_patch_lines=%s, include_github=%s.",
+        "Extractor settings: since_date=%s, since_days=%s, max_commits=%s, "
+        "max_patch_lines=%s, include_github=%s.",
+        cfg.extract.since_date or "(none)",
         cfg.extract.since_days,
         cfg.extract.max_commits,
         cfg.extract.max_patch_lines,

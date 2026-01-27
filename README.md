@@ -15,7 +15,7 @@ The default config uses OpenAI `gpt-5.2` with `reasoning_effort="xhigh"`, so you
 
 ## Configuration
 
-The app reads `different.toml`. This is where you set the “recent” window (days + max commits), how many patch lines are fetched per commit, whether GitHub enrichment is enabled, whether HTML reports are generated, and the default model settings.
+The app reads `different.toml`. This is where you set the “recent” window (days + max commits), how many patch lines are fetched per commit, whether GitHub enrichment is enabled, whether HTML reports are generated, and the default model settings. You can also set `extract.since_date` (YYYY-MM-DD or ISO-8601) to scan from a fixed date; it overrides `since_days`.
 You can override the model per run with `--model`.
 
 ## Usage
@@ -31,5 +31,11 @@ Run extraction only (skip target analysis):
 ```bash
 uv sync --all-groups
 different-agent --inspiration /path/to/inspiration-repo --extract-only
+```
+
+Scan from a given date (overrides `since_days`):
+
+```bash
+different-agent --inspiration /path/to/inspiration-repo --target /path/to/target-repo --since-date 2024-01-01
 ```
  
