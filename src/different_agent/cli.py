@@ -101,6 +101,8 @@ def _apply_cli_overrides(cfg: AppConfig, args: argparse.Namespace) -> AppConfig:
     # Model provider/reasoning live in config; --model is the only per-run override requested.
     since_days_override = getattr(args, "since_days", None)
     since_date_override = getattr(args, "since_date", None)
+    from_pr_override = getattr(args, "from_pr", None)
+    to_pr_override = getattr(args, "to_pr", None)
     if since_date_override is not None:
         raw_since_date = since_date_override
         since_days_override = None
@@ -129,6 +131,21 @@ def _apply_cli_overrides(cfg: AppConfig, args: argparse.Namespace) -> AppConfig:
             since_days_override if since_days_override is not None else cfg.extract.since_days
         )
         effective_since_date = None
+    if from_pr_override is None:
+        from_pr = cfg.extract.from_pr
+    else:
+        from_pr = from_pr_override
+    if to_pr_override is None:
+        to_pr = cfg.extract.to_pr
+    else:
+        to_pr = to_pr_override
+    if (from_pr is None) ^ (to_pr is None):
+        raise SystemExit("--from-pr and --to-pr must be provided together.")
+    if from_pr is not None and to_pr is not None:
+        if from_pr <= 0 or to_pr <= 0:
+            raise SystemExit("--from-pr and --to-pr must be positive integers.")
+        if from_pr > to_pr:
+            raise SystemExit("--from-pr must be <= --to-pr.")
     max_commits = getattr(args, "max_commits", None)
     max_patch_lines = getattr(args, "max_patch_lines", None)
     return AppConfig(
@@ -148,6 +165,8 @@ def _apply_cli_overrides(cfg: AppConfig, args: argparse.Namespace) -> AppConfig:
             include_github=cfg.extract.include_github,
             max_issues=cfg.extract.max_issues,
             max_prs=cfg.extract.max_prs,
+            from_pr=from_pr,
+            to_pr=to_pr,
         ),
         reports=cfg.reports,
     )
@@ -276,6 +295,18 @@ def main() -> int:
         help="Override extract.since_date (YYYY-MM-DD or ISO-8601). Overrides since_days.",
     )
     parser.add_argument(
+        "--from-pr",
+        type=int,
+        default=None,
+        help="Limit GitHub PRs to a number range (inclusive). Requires --to-pr.",
+    )
+    parser.add_argument(
+        "--to-pr",
+        type=int,
+        default=None,
+        help="Limit GitHub PRs to a number range (inclusive). Requires --from-pr.",
+    )
+    parser.add_argument(
         "--max-commits", type=int, default=None, help="Override extract.max_commits"
     )
     parser.add_argument(
@@ -301,6 +332,7 @@ def main() -> int:
     logger.info("Loading config from %s.", cfg_path)
     cfg = load_config(cfg_path)
     cfg = _apply_cli_overrides(cfg, args)
+    pr_range_active = cfg.extract.from_pr is not None and cfg.extract.to_pr is not None
     logger.info(
         "Using model %s with provider %s (reasoning_effort=%s, temperature=%s).",
         cfg.model.name,
@@ -310,12 +342,14 @@ def main() -> int:
     )
     logger.info(
         "Extractor settings: since_date=%s, since_days=%s, max_commits=%s, "
-        "max_patch_lines=%s, include_github=%s.",
+        "max_patch_lines=%s, include_github=%s, from_pr=%s, to_pr=%s.",
         cfg.extract.since_date or "(none)",
         cfg.extract.since_days,
         cfg.extract.max_commits,
         cfg.extract.max_patch_lines,
         cfg.extract.include_github,
+        cfg.extract.from_pr,
+        cfg.extract.to_pr,
     )
     logger.info(
         "GitHub limits: max_issues=%s, max_prs=%s.",
@@ -348,7 +382,12 @@ def main() -> int:
     extract_result: dict[str, Any] = {}
     target_result: dict[str, Any] = {}
     with get_usage_metadata_callback() as usage_cb:
-        extract_agent = create_inspiration_agent(resolved.model, cache=cache)
+        extract_agent = create_inspiration_agent(
+            resolved.model,
+            cache=cache,
+            include_commits=not pr_range_active,
+            include_issues=not pr_range_active,
+        )
         extract_prompt = (
             "Analyze this inspiration repository and write findings.\n\n"
             f"inspiration_repo_path: {inspiration_path}\n"
@@ -358,6 +397,8 @@ def main() -> int:
             f"include_github: {cfg.extract.include_github}\n"
             f"max_issues: {cfg.extract.max_issues}\n"
             f"max_prs: {cfg.extract.max_prs}\n"
+            f"from_pr: {cfg.extract.from_pr}\n"
+            f"to_pr: {cfg.extract.to_pr}\n"
         )
         logger.info("Invoking inspiration agent.")
         extract_result = extract_agent.invoke(

@@ -22,6 +22,8 @@ class ExtractConfig:
     include_github: bool = True
     max_issues: int = 50
     max_prs: int = 50
+    from_pr: int | None = None
+    to_pr: int | None = None
 
 
 @dataclass(frozen=True)
@@ -75,6 +77,15 @@ def _get_int(table: dict[str, Any], key: str, default: int) -> int:
     return value
 
 
+def _get_optional_int(table: dict[str, Any], key: str, default: int | None) -> int | None:
+    value = table.get(key, default)
+    if value is None:
+        return None
+    if not isinstance(value, int):
+        raise ValueError(f"Config value must be an int or null: {key}")
+    return value
+
+
 def _get_float(table: dict[str, Any], key: str, default: float) -> float:
     value = table.get(key, default)
     if isinstance(value, int):
@@ -116,6 +127,8 @@ def load_config(path: Path) -> AppConfig:
         include_github=_get_bool(extract_raw, "include_github", ExtractConfig.include_github),
         max_issues=_get_int(extract_raw, "max_issues", ExtractConfig.max_issues),
         max_prs=_get_int(extract_raw, "max_prs", ExtractConfig.max_prs),
+        from_pr=_get_optional_int(extract_raw, "from_pr", ExtractConfig.from_pr),
+        to_pr=_get_optional_int(extract_raw, "to_pr", ExtractConfig.to_pr),
     )
 
     reports = ReportsConfig(

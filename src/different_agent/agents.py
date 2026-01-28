@@ -79,6 +79,8 @@ The user message will include:
 - include_github: <true/false>
 - max_issues: <int>
 - max_prs: <int>
+- from_pr: <int or null>
+- to_pr: <int or null>
 
 Goal:
 - Identify recent bug fixes or vulnerability fixes from commit history.
@@ -123,14 +125,13 @@ Finding fields (schema {FINDING_SCHEMA_VERSION}):
 Workflow (recommended):
 1) Use write_todos to plan.
 2) Treat inspiration_repo_path as repo_path for all git tools.
-3) Call git_recent_commits(repo_path, since_days, max_count). Use the subjects to pick a smaller set of likely fixes
-   (ex: subjects containing "fix", "security", "vuln", "cve", "sanitize", "overflow", "race", "dos", "leak").
-4) For each likely fix commit, call git_show_commit(repo_path, sha, max_patch_lines) and extract evidence. Skip commits
-   where the diff does not show an actual bug fix (docs/formatting/tests/refactor-only).
+3) If git_recent_commits is available, call git_recent_commits(repo_path, since_days, max_count). Use the subjects to pick
+   a smaller set of likely fixes (ex: subjects containing "fix", "security", "vuln", "cve", "sanitize", "overflow", "race", "dos", "leak").
+4) If git_show_commit is available, call git_show_commit(repo_path, sha, max_patch_lines) for likely fixes and extract evidence.
 5) Try to resolve GitHub owner/repo using git_github_repo(repo_path). If that succeeds, also call
-   github_recent_prs(owner, repo, since_days, max_prs) / github_recent_issues(owner, repo, since_days, max_issues)
-   for the same window, then fetch details (github_fetch_pr / github_fetch_pr_files / github_fetch_issue) only for
-   the items that look like fixes.
+   github_recent_prs(owner, repo, since_days, max_prs, from_pr, to_pr) / github_recent_issues(owner, repo, since_days, max_issues)
+   for the same window (unless from_pr/to_pr is provided), then fetch details (github_fetch_pr / github_fetch_pr_files / github_fetch_issue)
+   only for the items that look like fixes.
    If include_github is false, skip all GitHub tools.
 6) Write /outputs/findings.json.
 """
@@ -191,19 +192,30 @@ Workflow (recommended):
 """
 
 
-def create_inspiration_agent(model: BaseChatModel, cache: BaseCache | None = None):
-    return create_deep_agent(
-        model=model,
-        tools=[
+def create_inspiration_agent(
+    model: BaseChatModel,
+    cache: BaseCache | None = None,
+    *,
+    include_commits: bool = True,
+    include_issues: bool = True,
+):
+    tools = [
+        git_github_repo,
+        github_recent_prs,
+        github_fetch_pr,
+        github_fetch_pr_files,
+    ]
+    if include_commits:
+        tools = [
             git_recent_commits,
             git_show_commit,
-            git_github_repo,
-            github_recent_issues,
-            github_recent_prs,
-            github_fetch_issue,
-            github_fetch_pr,
-            github_fetch_pr_files,
-        ],
+            *tools,
+        ]
+    if include_issues:
+        tools.extend([github_recent_issues, github_fetch_issue])
+    return create_deep_agent(
+        model=model,
+        tools=tools,
         system_prompt=INSPIRATION_AGENT_PROMPT,
         response_format=AutoStrategy(FindingsResponse),
         cache=cache,

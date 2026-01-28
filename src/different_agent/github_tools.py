@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import re
+import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
@@ -153,16 +154,60 @@ def github_recent_issues(
 
 @tool
 def github_recent_prs(
-    owner: str, repo: str, since_days: int = 30, max_count: int = 50
+    owner: str,
+    repo: str,
+    since_days: int = 30,
+    max_count: int = 50,
+    from_pr: int | None = None,
+    to_pr: int | None = None,
 ) -> list[dict]:
-    """Fetch recent merged/closed PRs from GitHub."""
+    """Fetch recent merged/closed PRs from GitHub (optionally by PR number range)."""
     logger.info(
-        "Fetching recent PRs for %s/%s (since_days=%s, max_count=%s).",
+        "Fetching recent PRs for %s/%s (since_days=%s, max_count=%s, from_pr=%s, to_pr=%s).",
         owner,
         repo,
         since_days,
         max_count,
+        from_pr,
+        to_pr,
     )
+    if from_pr is not None or to_pr is not None:
+        if from_pr is None or to_pr is None:
+            return [{"error": "from_pr and to_pr must both be provided"}]
+        if from_pr <= 0 or to_pr <= 0:
+            return [{"error": "from_pr and to_pr must be positive"}]
+        if from_pr > to_pr:
+            return [{"error": "from_pr must be <= to_pr"}]
+        results: list[dict] = []
+        for number in range(from_pr, to_pr + 1):
+            url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{number}"
+            try:
+                item = _github_request_json(url)
+            except urllib.error.HTTPError as e:
+                if e.code == 404:
+                    continue
+                return [{"error": f"GitHub request failed: {e}"}]
+            except Exception as e:
+                return [{"error": f"GitHub request failed: {e}"}]
+            if not isinstance(item, dict):
+                continue
+            if item.get("state") != "closed":
+                continue
+            results.append(
+                {
+                    "number": item.get("number"),
+                    "title": item.get("title"),
+                    "state": item.get("state"),
+                    "merged_at": item.get("merged_at"),
+                    "updated_at": item.get("updated_at"),
+                    "html_url": item.get("html_url"),
+                }
+            )
+            if len(results) >= max_count:
+                break
+        logger.info("Fetched %s PRs.", len(results))
+        return results
+
     threshold = datetime.now(UTC) - timedelta(days=since_days)
     query = urllib.parse.urlencode(
         {
@@ -180,7 +225,7 @@ def github_recent_prs(
     if not isinstance(items, list):
         return [{"error": "Unexpected response from GitHub pulls API"}]
 
-    results: list[dict] = []
+    results = []
     for item in items:
         if not isinstance(item, dict):
             continue

@@ -38,4 +38,12 @@ Scan from a given date (overrides `since_days`):
 ```bash
 different-agent --inspiration /path/to/inspiration-repo --target /path/to/target-repo --since-date 2024-01-01
 ```
+
+Limit GitHub PRs to a number range (inclusive):
+
+```bash
+different-agent --inspiration /path/to/inspiration-repo --extract-only --from-pr 3300 --to-pr 3350
+```
+
+When a PR range is provided, the extractor skips commit and issue scanning and focuses on GitHub PRs only.
  
