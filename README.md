@@ -1,7 +1,6 @@
 # Different
 
-[![tests](https://github.com/kevin-valerio/different/actions/workflows/ci.yml/badge.svg?label=tests)](https://github.com/kevin-valerio/different/actions/workflows/ci.yml)
-[![coverage](https://img.shields.io/badge/coverage-%E2%89%A580%25-brightgreen)](#testing)
+[![tests](https://github.com/trailofbits/different/actions/workflows/ci.yml/badge.svg?label=tests)](https://github.com/trailofbits/different/actions/workflows/ci.yml)
 
 Different is a small agentic app built with DeepAgents. It does two things:
 
@@ -24,6 +23,7 @@ This repo includes a `.pre-commit-config.yaml` that runs `ruff`, `ty`, and `shel
 Use `prek` (or `pre-commit`) to run the hooks, for example:
 
 ```bash
+uv sync --group lint
 prek run --all-files
 ```
 
