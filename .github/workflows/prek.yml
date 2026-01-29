@@ -7,4 +7,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          python-version: "3.11"
+          enable-cache: true
+      - name: Install lint dependencies
+        run: uv sync --group lint --frozen
       - uses: j178/prek-action@v1
