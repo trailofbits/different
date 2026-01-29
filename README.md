@@ -1,5 +1,7 @@
 # Different
 
+[![ci](https://github.com/kevin-valerio/different/actions/workflows/ci.yml/badge.svg)](https://github.com/kevin-valerio/different/actions/workflows/ci.yml)
+
 Different is a small agentic app built with DeepAgents. It does two things:
 
 - First, it looks at an "inspiration" local Git repository and tries to extract recent bug fixes and security fixes, skipping docs/formatting/test/refactor-only commits unless the diff shows an actual bug fix. It outputs a structured JSON file with one entry per fix, including idea-level root causes and tags so matching can be flexible.
