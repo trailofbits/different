@@ -10,6 +10,22 @@ from langchain_core.tools import tool
 logger = logging.getLogger(__name__)
 
 
+_ANALYZED_COMMITS: set[str] = set()
+
+
+def _record_analyzed_commit(sha: str | None) -> None:
+    if sha:
+        _ANALYZED_COMMITS.add(sha)
+
+
+def get_analyzed_commit_count() -> int:
+    return len(_ANALYZED_COMMITS)
+
+
+def reset_analyzed_commit_count() -> None:
+    _ANALYZED_COMMITS.clear()
+
+
 @dataclass(frozen=True)
 class GitCommandResult:
     stdout: str
@@ -143,6 +159,7 @@ def git_show_commit(repo_path: str, sha: str, max_patch_lines: int = 400) -> dic
         len(files_changed),
         truncated,
     )
+    _record_analyzed_commit(commit_sha)
     return {
         "sha": commit_sha,
         "author": author,

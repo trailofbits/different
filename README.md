@@ -15,6 +15,15 @@ The logic is agentic: an LLM calls local Git tools (and optional GitHub API tool
 
 The default config uses GPT-5.2 with xhigh reasonning. If you switch to a Claude model via `--model`, you need `ANTHROPIC_API_KEY`.
 
+## Pre-commit hooks
+
+This repo includes a `.pre-commit-config.yaml` that runs `ruff`, `ty`, and `shellcheck`.
+Use `prek` (or `pre-commit`) to run the hooks, for example:
+
+```bash
+prek run --all-files
+```
+
 ## Configuration
 
 The app reads `different.toml`. This is where you set the “recent” window (days + max commits), how many patch lines are fetched per commit, whether GitHub enrichment is enabled, whether HTML reports are generated, and the default model settings. You can also set `extract.since_date` (YYYY-MM-DD or ISO-8601) to scan from a fixed date; it overrides `since_days`.
@@ -35,6 +44,10 @@ uv sync --all-groups
 different-agent --inspiration /path/to/inspiration-repo --extract-only
 ```
 
+Outputs are written under `outputs/<project_name>/` and get a time-based suffix per run.
+For example: `outputs/my-target/target_assessment_01-12_22-12.json`.
+At the end of a run, the console also prints how many commits and PRs were analyzed.
+
 Scan from a given date (overrides `since_days`):
 
 ```bash
@@ -48,3 +61,25 @@ different-agent --inspiration /path/to/inspiration-repo --extract-only --from-pr
 ```
 
 When a PR range is provided, the extractor skips commit and issue scanning and focuses on GitHub PRs only.
+
+## Linting (Ruff)
+
+We use Ruff as the single linter.
+
+Enabled rules:
+- `E`, `F`, `W`: pycodestyle/pyflakes errors and warnings.
+- `I`: import sorting.
+- `B`: bugbear (common bug patterns).
+- `UP`: pyupgrade (modern Python syntax).
+
+Per-file ignores:
+- `src/different_agent/agents.py` and `src/different_agent/report.py`: `E501` is ignored because
+  long prompt strings and report templates are kept readable, not manually wrapped.
+
+Inline `noqa`:
+- `src/different_agent/github_tools.py`: `# noqa: S310` is used on the GitHub API call because
+  the host/scheme is fixed to GitHub and not user-controlled.
+
+## Maintenance
+
+Dependabot is configured for uv with grouped updates (dev vs production) and a 7-day cooldown.

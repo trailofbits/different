@@ -24,6 +24,23 @@ class GitHubRepo:
     repo: str
 
 
+_ANALYZED_PRS: set[tuple[str, str, int]] = set()
+
+
+def _record_analyzed_pr(owner: str | None, repo: str | None, number: int | None) -> None:
+    if not owner or not repo or not isinstance(number, int):
+        return
+    _ANALYZED_PRS.add((owner, repo, number))
+
+
+def get_analyzed_pr_count() -> int:
+    return len(_ANALYZED_PRS)
+
+
+def reset_analyzed_pr_count() -> None:
+    _ANALYZED_PRS.clear()
+
+
 def _github_token() -> str | None:
     return (
         os.environ.get("GITHUB_TOKEN")
@@ -42,6 +59,7 @@ def _github_request_json(url: str) -> Any:
         headers["Authorization"] = f"Bearer {token}"
 
     req = urllib.request.Request(url, headers=headers)
+    # S310: URL is built from GitHub API base; no user-controlled host/scheme.
     with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
         payload = resp.read().decode("utf-8")
         return json.loads(payload)
@@ -203,6 +221,7 @@ def github_recent_prs(
                     "html_url": item.get("html_url"),
                 }
             )
+            _record_analyzed_pr(owner, repo, item.get("number"))
             if len(results) >= max_count:
                 break
         logger.info("Fetched %s PRs.", len(results))
@@ -249,6 +268,7 @@ def github_recent_prs(
                 "html_url": item.get("html_url"),
             }
         )
+        _record_analyzed_pr(owner, repo, item.get("number"))
         if len(results) >= max_count:
             break
     logger.info("Fetched %s PRs.", len(results))
@@ -355,4 +375,5 @@ def github_fetch_pr_files(owner: str, repo: str, number: int, max_files: int = 2
             if len(files) >= max_files:
                 break
         page += 1
+    _record_analyzed_pr(owner, repo, number)
     return files

@@ -15,6 +15,8 @@ from langgraph.cache.memory import InMemoryCache
 
 from different_agent.agents import create_inspiration_agent, create_target_agent
 from different_agent.config import AppConfig, load_config
+from different_agent.git_tools import get_analyzed_commit_count, reset_analyzed_commit_count
+from different_agent.github_tools import get_analyzed_pr_count, reset_analyzed_pr_count
 from different_agent.model import create_chat_model
 from different_agent.report import render_findings_html, render_target_assessment_html
 
@@ -57,6 +59,23 @@ def _write_output_json(path: Path, content: str) -> None:
 def _write_output_html(path: Path, html_content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(html_content, encoding="utf-8")
+
+
+def _output_suffix(now: datetime | None = None) -> str:
+    timestamp = (now or datetime.now()).strftime("%m-%d_%H-%M")
+    return timestamp
+
+
+def _output_project_name(inspiration_path: str, target_path: str | None) -> str:
+    base = target_path or inspiration_path
+    name = Path(base).name.strip()
+    return name or "project"
+
+
+def _apply_output_naming(base_path: Path, project_name: str, suffix: str) -> Path:
+    output_dir = base_path.parent / project_name
+    stem = base_path.stem or "output"
+    return output_dir / f"{stem}_{suffix}{base_path.suffix}"
 
 
 def _extract_state_file(result: dict, file_path: str) -> str | None:
@@ -261,6 +280,8 @@ def main() -> int:
     _configure_logging()
     logger.info("Starting different-agent.")
     load_dotenv()
+    reset_analyzed_commit_count()
+    reset_analyzed_pr_count()
 
     parser = argparse.ArgumentParser(prog="different-agent")
     parser.add_argument(
@@ -315,12 +336,12 @@ def main() -> int:
     parser.add_argument(
         "--findings-out",
         default="outputs/findings.json",
-        help="Output path for extracted findings JSON",
+        help="Base output path for findings JSON (suffix + project folder are added)",
     )
     parser.add_argument(
         "--assessment-out",
         default="outputs/target_assessment.json",
-        help="Output path for target assessment JSON",
+        help="Base output path for target assessment JSON (suffix + project folder are added)",
     )
 
     args = parser.parse_args()
@@ -379,6 +400,9 @@ def main() -> int:
         assert target_path is not None
         _ensure_git_repo(target_path)
 
+    output_suffix = _output_suffix()
+    output_project_name = _output_project_name(inspiration_path, target_path)
+
     extract_result: dict[str, Any] = {}
     target_result: dict[str, Any] = {}
     with get_usage_metadata_callback() as usage_cb:
@@ -415,7 +439,9 @@ def main() -> int:
             findings_json = _extract_state_file(extract_result, "/outputs/findings.json")
             if findings_json is None:
                 raise SystemExit("Agent did not write /outputs/findings.json")
-        findings_out_path = Path(args.findings_out)
+        findings_out_path = _apply_output_naming(
+            Path(args.findings_out), output_project_name, output_suffix
+        )
         _write_output_json(findings_out_path, findings_json)
         logger.info("Wrote findings JSON to %s.", findings_out_path)
         if cfg.reports.html:
@@ -463,7 +489,9 @@ def main() -> int:
                 )
                 if assessment_json is None:
                     raise SystemExit("Agent did not write /outputs/target_assessment.json")
-            assessment_out_path = Path(args.assessment_out)
+            assessment_out_path = _apply_output_naming(
+                Path(args.assessment_out), output_project_name, output_suffix
+            )
             _write_output_json(assessment_out_path, assessment_json)
             logger.info("Wrote target assessment JSON to %s.", assessment_out_path)
             if cfg.reports.html:
@@ -477,4 +505,9 @@ def main() -> int:
     if not args.extract_only:
         results.append(target_result)
     _log_run_usage(usage_cb.usage_metadata, results)
+    logger.info(
+        "Analyzed commits: %s. Analyzed PRs: %s.",
+        get_analyzed_commit_count(),
+        get_analyzed_pr_count(),
+    )
     return 0
