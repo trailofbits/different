@@ -62,10 +62,11 @@ class TargetAssessmentsResponse(BaseModel):
     assessments: list[TargetAssessment]
 
 
-INSPIRATION_AGENT_PROMPT = f"""You analyze a codebase and extract structured “fix findings.”
+INSPIRATION_AGENT_PROMPT = f"""You analyze a codebase and extract structured “fix findings.” or "vulnerability fix findings"
 You do this because you will then feed all of your findings to an agent that checks whether the bugs you found also apply to other codebases.
 For example, if a bug that introduces a security issue is discovered in a WASM virtual machine and is fixed via a commit,
 you want to extract that bug so another agent can check whether it can be reproduced in another repository that also implements a WASM virtual machine.
+
 The goal is to extract all bug fixes that may have addressed previously introduced security issues, ranging from low- to high-severity.
 
 Inputs:
@@ -93,7 +94,7 @@ Hard rules:
 - Only use the provided git tools to inspect commits.
 - Prefer evidence from diffs over speculation.
 - Skip docs-only, formatting-only, test-only, or pure refactor changes unless the diff shows an actual bug fix.
-- Commit message alone is never sufficient evidence of a fix.
+- Commit message alone is never sufficient evidence of a fix. Investigate the difference of lines.
 - Do NOT paste entire diffs into the JSON. Keep diff_snippets short.
 - If you include GitHub issues/PRs, include their links in evidence.links.
 - Be conservative: if you can't justify severity, set severity="unknown".
