@@ -27,12 +27,24 @@ uv sync --group lint
 prek run --all-files
 ```
 
+Or use the Makefile:
+
+```bash
+make lint
+```
+
 ## Testing
 - `pytest` runs with `pytest-cov` .
 - Warnings are treated as errors.
 Run:
 ```bash
 uv run pytest
+```
+
+Or use the Makefile:
+
+```bash
+make test
 ```
 
 ## Configuration
