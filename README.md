@@ -28,14 +28,9 @@ prek run --all-files
 ```
 
 ## Testing
-
-- `pytest` runs with `pytest-cov` and enforces coverage ≥80%.
+- `pytest` runs with `pytest-cov` .
 - Warnings are treated as errors.
-- The test suite should complete in under 2 minutes.
-- If a test is skipped, it must include a reason.
-
 Run:
-
 ```bash
 uv run pytest
 ```
@@ -77,24 +72,6 @@ different-agent --inspiration /path/to/inspiration-repo --extract-only --from-pr
 ```
 
 When a PR range is provided, the extractor skips commit and issue scanning and focuses on GitHub PRs only.
-
-## Linting (Ruff)
-
-We use Ruff as the single linter.
-
-Enabled rules:
-- `E`, `F`, `W`: pycodestyle/pyflakes errors and warnings.
-- `I`: import sorting.
-- `B`: bugbear (common bug patterns).
-- `UP`: pyupgrade (modern Python syntax).
-
-Per-file ignores:
-- `src/different_agent/agents.py` and `src/different_agent/report.py`: `E501` is ignored because
-  long prompt strings and report templates are kept readable, not manually wrapped.
-
-Inline `noqa`:
-- `src/different_agent/github_tools.py`: `# noqa: S310` is used on the GitHub API call because
-  the host/scheme is fixed to GitHub and not user-controlled.
 
 ## Maintenance
 
