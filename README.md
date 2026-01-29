@@ -7,11 +7,13 @@ Different is a small agentic app built with DeepAgents. It does two things:
 
 The logic is agentic: an LLM calls local Git tools (and optional GitHub API tools) in a loop to inspect commits, diffs, and related PR/issue context. The target assessment agent now follows a security-judge style and appends a clear verdict to each assessment's `why` field.
 
-**If you’re doing differential fuzzing between two codebases, you should also use this tool too.**
+## When to use it
+- Let's assume you are doing differential fuzzing between two parsers, `A` and `B`. They should behave almost identically. In that case, running `different` might be a good idea, to ensure that recents bug/vuln fixes from codebase `A` cannot apply to codebase `B`.
+- You can use this tool when doing code-review. That way it puts you directly into what kind of vulnerabilities exist and are being fixed by the team, and get inspiration from this.
 
 ## Requirements
 
-The default config uses OpenAI `gpt-5.2` with `reasoning_effort="xhigh"`, so you usually want `OPENAI_API_KEY` set. If you switch to a Claude model via `--model`, you need `ANTHROPIC_API_KEY`.
+The default config uses GPT-5.2 with xhigh reasonning. If you switch to a Claude model via `--model`, you need `ANTHROPIC_API_KEY`.
 
 ## Configuration
 
@@ -46,4 +48,3 @@ different-agent --inspiration /path/to/inspiration-repo --extract-only --from-pr
 ```
 
 When a PR range is provided, the extractor skips commit and issue scanning and focuses on GitHub PRs only.
- 
