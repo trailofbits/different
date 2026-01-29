@@ -1,6 +1,7 @@
 # Different
 
-[![ci](https://github.com/kevin-valerio/different/actions/workflows/ci.yml/badge.svg)](https://github.com/kevin-valerio/different/actions/workflows/ci.yml)
+[![tests](https://github.com/kevin-valerio/different/actions/workflows/ci.yml/badge.svg?label=tests)](https://github.com/kevin-valerio/different/actions/workflows/ci.yml)
+[![coverage](https://img.shields.io/badge/coverage-%E2%89%A580%25-brightgreen)](#testing)
 
 Different is a small agentic app built with DeepAgents. It does two things:
 
@@ -24,6 +25,19 @@ Use `prek` (or `pre-commit`) to run the hooks, for example:
 
 ```bash
 prek run --all-files
+```
+
+## Testing
+
+- `pytest` runs with `pytest-cov` and enforces coverage ≥80%.
+- Warnings are treated as errors.
+- The test suite should complete in under 2 minutes.
+- If a test is skipped, it must include a reason.
+
+Run:
+
+```bash
+uv run pytest
 ```
 
 ## Configuration
