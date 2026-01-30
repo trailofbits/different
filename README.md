@@ -13,6 +13,7 @@ The logic is agentic: an LLM calls local Git tools (and optional GitHub API tool
 - Let's assume you are doing differential fuzzing between two parsers, `A` and `B`. They should behave almost identically. In that case, running `different` might be a good idea, to ensure that recents bug/vuln fixes from codebase `A` cannot apply to codebase `B`.
 - You can use this tool when doing code-review. That way it puts you directly into what kind of vulnerabilities exist and are being fixed by the team, and get inspiration from this.
 - Agentic context. Give this to an agent and ask interesting questions, for instance _"could a fuzzer have found these bugs ? If yes, generate a harness and reproduce the bugs."_
+- 
 ## Requirements
 
 The default config uses GPT-5.2 with xhigh reasonning. If you switch to a Claude model via `--model`, you need `ANTHROPIC_API_KEY`.
@@ -84,7 +85,3 @@ different-agent --inspiration /path/to/inspiration-repo --extract-only --from-pr
 ```
 
 When a PR range is provided, the extractor skips commit and issue scanning and focuses on GitHub PRs only.
-
-## Maintenance
-
-Dependabot is configured for uv with grouped updates (dev vs production) and a 7-day cooldown.
