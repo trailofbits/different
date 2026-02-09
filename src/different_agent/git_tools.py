@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import subprocess
 from dataclasses import dataclass
 
@@ -252,4 +253,91 @@ def git_grep(
         if len(matches) >= max_matches:
             break
     logger.info("Found %s matches.", len(matches))
+    return matches
+
+
+@tool
+def git_diff(
+    repo_path: str,
+    ref_a: str,
+    ref_b: str = "HEAD",
+    max_lines: int = 400,
+    path_filter: str = "",
+) -> dict:
+    """Compare two git refs and return the unified diff."""
+    logger.info("Diffing %s..%s in %s (max_lines=%s).", ref_a, ref_b, repo_path, max_lines)
+    if max_lines <= 0:
+        raise ValueError("max_lines must be > 0")
+
+    args = ["diff", "--no-color", f"{ref_a}...{ref_b}"]
+    if path_filter:
+        args += ["--", path_filter]
+
+    out = _run_git(repo_path, args).stdout
+    lines = out.splitlines()
+    truncated = False
+    if len(lines) > max_lines:
+        lines = lines[:max_lines]
+        truncated = True
+    return {
+        "ref_a": ref_a,
+        "ref_b": ref_b,
+        "diff": "\n".join(lines) + ("\n\n[diff truncated]" if truncated else ""),
+        "truncated": truncated,
+    }
+
+
+@tool
+def ast_grep(
+    repo_path: str,
+    pattern: str,
+    language: str = "",
+    max_matches: int = 50,
+) -> list[dict]:
+    """Structural code search using ast-grep. Matches AST patterns instead of plain text."""
+    pattern_preview = pattern if len(pattern) <= 120 else f"{pattern[:120]}..."
+    logger.info(
+        "ast-grep search for %r in %s (lang=%s, max_matches=%s).",
+        pattern_preview,
+        repo_path,
+        language or "auto",
+        max_matches,
+    )
+    if max_matches <= 0:
+        raise ValueError("max_matches must be > 0")
+
+    bin_path = shutil.which("ast-grep") or shutil.which("sg")
+    if bin_path is None:
+        return [{"error": "ast-grep is not installed (install via: cargo install ast-grep)"}]
+
+    args = [bin_path, "--pattern", pattern, "--json"]
+    if language:
+        args += ["--lang", language]
+    args += [repo_path]
+
+    completed = subprocess.run(args, check=False, text=True, capture_output=True)
+    if completed.returncode != 0 and not completed.stdout:
+        error = (completed.stderr or "").strip() or "ast-grep failed"
+        logger.warning("ast-grep failed: %s.", error)
+        return [{"error": error}]
+
+    import json
+
+    try:
+        raw: list[dict] = json.loads(completed.stdout)
+    except json.JSONDecodeError:
+        return [{"error": "Failed to parse ast-grep JSON output"}]
+
+    matches: list[dict] = []
+    for item in raw:
+        matches.append(
+            {
+                "file": item.get("file", ""),
+                "line": item.get("range", {}).get("start", {}).get("line"),
+                "text": item.get("text", ""),
+            }
+        )
+        if len(matches) >= max_matches:
+            break
+    logger.info("ast-grep found %s matches.", len(matches))
     return matches

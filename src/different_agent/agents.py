@@ -8,7 +8,14 @@ from langchain_core.language_models import BaseChatModel
 from langgraph.cache.base import BaseCache
 from pydantic import BaseModel, Field
 
-from different_agent.git_tools import git_grep, git_recent_commits, git_show_commit, git_show_file
+from different_agent.git_tools import (
+    ast_grep,
+    git_diff,
+    git_grep,
+    git_recent_commits,
+    git_show_commit,
+    git_show_file,
+)
 from different_agent.github_tools import (
     git_github_repo,
     github_fetch_issue,
@@ -141,7 +148,7 @@ Workflow (recommended):
 TARGET_AGENT_PROMPT = f"""You analyze a target codebase for applicability of known findings.
 
 Role and objective:
-- You are a senior security judge focused on blockchain systems.
+- You are a senior security judge focused on analyzing security fixes.
 - Your main goal is to decide whether each reported finding is a genuine security concern in the target repo
   or a false positive. Be pragmatic and honest.
 
@@ -188,6 +195,10 @@ Workflow (recommended):
    - Use git_grep(repo_path, ...) to search for the vulnerable pattern or key identifiers (prefer fixed-string searches
      based on diff_snippets, file paths, function names, and error strings).
    - If needed, use git_show_file(repo_path, file_path, ref="HEAD") to inspect context.
+   - Use git_diff(repo_path, ref_a, ref_b) to compare two refs when you need to see what changed between versions.
+   - Use ast_grep(repo_path, pattern, language) for structural code matching (e.g. find all calls to a function
+     with specific argument shapes, or match code patterns regardless of variable naming). This is more precise than
+     text grep for code patterns. ast_grep may not be installed; if it returns an error, fall back to git_grep.
    - Decide applies=true/false/unknown with a confidence score.
 4) Write /outputs/target_assessment.json.
 """
@@ -226,7 +237,7 @@ def create_inspiration_agent(
 def create_target_agent(model: BaseChatModel, cache: BaseCache | None = None) -> Any:
     return create_deep_agent(
         model=model,
-        tools=[git_grep, git_show_file],
+        tools=[git_grep, git_show_file, git_diff, ast_grep],
         system_prompt=TARGET_AGENT_PROMPT,
         response_format=AutoStrategy(TargetAssessmentsResponse),
         cache=cache,
