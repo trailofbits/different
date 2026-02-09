@@ -10,10 +10,10 @@ Different is a small agentic app built with DeepAgents. It does two things:
 The logic is agentic: an LLM calls local Git tools (and optional GitHub API tools) in a loop to inspect commits, diffs, and related PR/issue context. The target assessment agent now follows a security-judge style and appends a clear verdict to each assessment's `why` field.
 
 ## When to use it
-- Let's assume you are doing differential fuzzing between two parsers, `A` and `B`. They should behave almost identically. In that case, running `different` might be a good idea, to ensure that recents bug/vuln fixes from codebase `A` cannot apply to codebase `B`.
-- You can use this tool when doing code-review. That way it puts you directly into what kind of vulnerabilities exist and are being fixed by the team, and get inspiration from this.
-- Agentic context. Give this to an agent and ask interesting questions, for instance _"could a fuzzer have found these bugs ? If yes, generate a harness and reproduce the bugs."_
-- 
+- **Differential fuzzing.** You are fuzzing two parsers, `A` and `B`, that should behave almost identically. Run `different` to check that recent bug/vuln fixes from codebase `A` don't apply to codebase `B`.
+- **N-day hunting.** A CVE drops for library `X`. You have an internal fork or a similar implementation. Point `different` at `X` as inspiration and your codebase as target to quickly check if the same bug class affects you.
+- **Code review.** Before reviewing codebase `B`, run `different` against a well-maintained sibling codebase `A` to see what kinds of vulnerabilities are being fixed there and get inspiration from that.
+- **Agentic context.** Feed the structured JSON output to another agent and ask follow-up questions, e.g. _"could a fuzzer have found these bugs? If yes, generate a harness."_
 ## Requirements
 
 The default config uses GPT-5.2 with xhigh reasonning. If you switch to a Claude model via `--model`, you need `ANTHROPIC_API_KEY`.
