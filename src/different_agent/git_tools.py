@@ -288,6 +288,74 @@ def git_diff(
 
 
 @tool
+def git_log_search(repo_path: str, pattern: str, max_count: int = 20) -> list[dict]:
+    """Search commit messages in a git repository (via `git log --grep`)."""
+    logger.info(
+        "Searching commits for %r in %s (max_count=%s).",
+        pattern,
+        repo_path,
+        max_count,
+    )
+    if max_count <= 0:
+        raise ValueError("max_count must be > 0")
+
+    fmt = "%H%x1f%s%x1f%ad%x1e"
+    out = _run_git(
+        repo_path,
+        [
+            "log",
+            f"--grep={pattern}",
+            "--all",
+            f"--max-count={max_count}",
+            "--date=iso-strict",
+            f"--pretty=format:{fmt}",
+        ],
+    ).stdout
+
+    results: list[dict] = []
+    for record in out.split("\x1e"):
+        record = record.strip()
+        if not record:
+            continue
+        parts = record.split("\x1f")
+        if len(parts) != 3:
+            continue
+        sha, subject, date = parts
+        results.append({"sha": sha, "subject": subject, "date": date})
+    logger.info("Found %s matching commits.", len(results))
+    return results
+
+
+@tool
+def git_ls_files(repo_path: str, path_prefix: str = "", max_files: int = 200) -> list[str]:
+    """List tracked files in a git repository, optionally filtered by path prefix."""
+    logger.info(
+        "Listing files in %s (prefix=%r, max_files=%s).",
+        repo_path,
+        path_prefix,
+        max_files,
+    )
+    if max_files <= 0:
+        raise ValueError("max_files must be > 0")
+
+    args = ["ls-files"]
+    if path_prefix:
+        args.append(path_prefix)
+
+    out = _run_git(repo_path, args).stdout
+    files: list[str] = []
+    for line in out.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        files.append(line)
+        if len(files) >= max_files:
+            break
+    logger.info("Listed %s files.", len(files))
+    return files
+
+
+@tool
 def ast_grep(
     repo_path: str,
     pattern: str,

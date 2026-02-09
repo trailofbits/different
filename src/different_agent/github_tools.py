@@ -215,6 +215,11 @@ def github_recent_prs(
                     "number": item.get("number"),
                     "title": item.get("title"),
                     "state": item.get("state"),
+                    "labels": [
+                        label.get("name")
+                        for label in item.get("labels", [])
+                        if isinstance(label, dict)
+                    ],
                     "merged_at": item.get("merged_at"),
                     "updated_at": item.get("updated_at"),
                     "html_url": item.get("html_url"),
@@ -262,6 +267,9 @@ def github_recent_prs(
                 "number": item.get("number"),
                 "title": item.get("title"),
                 "state": item.get("state"),
+                "labels": [
+                    label.get("name") for label in item.get("labels", []) if isinstance(label, dict)
+                ],
                 "merged_at": merged_at,
                 "updated_at": updated_at,
                 "html_url": item.get("html_url"),
@@ -324,6 +332,9 @@ def github_fetch_pr(owner: str, repo: str, number: int) -> dict:
         "number": item.get("number"),
         "title": item.get("title"),
         "state": item.get("state"),
+        "labels": [
+            label.get("name") for label in item.get("labels", []) if isinstance(label, dict)
+        ],
         "merged_at": item.get("merged_at"),
         "updated_at": item.get("updated_at"),
         "html_url": item.get("html_url"),
@@ -376,3 +387,64 @@ def github_fetch_pr_files(owner: str, repo: str, number: int, max_files: int = 2
         page += 1
     _record_analyzed_pr(owner, repo, number)
     return files
+
+
+@tool
+def github_fetch_pr_comments(
+    owner: str, repo: str, number: int, max_comments: int = 50
+) -> list[dict]:
+    """Fetch review comments and issue-style comments for a PR."""
+    logger.info(
+        "Fetching comments for PR #%s in %s/%s (max_comments=%s).",
+        number,
+        owner,
+        repo,
+        max_comments,
+    )
+    comments: list[dict] = []
+
+    # Review comments (line-level, on the diff)
+    review_url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{number}/comments?per_page=100"
+    try:
+        review_items = _github_request_json(review_url)
+    except Exception as e:
+        return [{"error": f"GitHub request failed: {e}"}]
+    if isinstance(review_items, list):
+        for item in review_items:
+            if not isinstance(item, dict):
+                continue
+            body = (item.get("body") or "")[:4000]
+            comments.append(
+                {
+                    "user": (item.get("user") or {}).get("login"),
+                    "body": body,
+                    "created_at": item.get("created_at"),
+                    "path": item.get("path"),
+                    "line": item.get("line"),
+                }
+            )
+
+    # Issue-style comments (general PR discussion)
+    issue_url = f"https://api.github.com/repos/{owner}/{repo}/issues/{number}/comments?per_page=100"
+    try:
+        issue_items = _github_request_json(issue_url)
+    except Exception as e:
+        return [{"error": f"GitHub request failed: {e}"}]
+    if isinstance(issue_items, list):
+        for item in issue_items:
+            if not isinstance(item, dict):
+                continue
+            body = (item.get("body") or "")[:4000]
+            comments.append(
+                {
+                    "user": (item.get("user") or {}).get("login"),
+                    "body": body,
+                    "created_at": item.get("created_at"),
+                    "path": None,
+                    "line": None,
+                }
+            )
+
+    comments = comments[:max_comments]
+    logger.info("Fetched %s comments.", len(comments))
+    return comments

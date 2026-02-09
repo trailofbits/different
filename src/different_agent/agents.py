@@ -12,6 +12,8 @@ from different_agent.git_tools import (
     ast_grep,
     git_diff,
     git_grep,
+    git_log_search,
+    git_ls_files,
     git_recent_commits,
     git_show_commit,
     git_show_file,
@@ -20,6 +22,7 @@ from different_agent.github_tools import (
     git_github_repo,
     github_fetch_issue,
     github_fetch_pr,
+    github_fetch_pr_comments,
     github_fetch_pr_files,
     github_recent_issues,
     github_recent_prs,
@@ -69,12 +72,9 @@ class TargetAssessmentsResponse(BaseModel):
     assessments: list[TargetAssessment]
 
 
-INSPIRATION_AGENT_PROMPT = f"""You analyze a codebase and extract structured “fix findings.” or "vulnerability fix findings"
-You do this because you will then feed all of your findings to an agent that checks whether the bugs you found also apply to other codebases.
-For example, if a bug that introduces a security issue is discovered in a WASM virtual machine and is fixed via a commit,
-you want to extract that bug so another agent can check whether it can be reproduced in another repository that also implements a WASM virtual machine.
+INSPIRATION_AGENT_PROMPT = f"""You are a security engineer, and you analyze a codebase and extract structured “fix findings” or "vulnerability fix findings"
 
-The goal is to extract all bug fixes that may have addressed previously introduced security issues, ranging from low- to high-severity.
+The goal is to extract all bug fixes that may have addressed previously introduced security issues, ranging from low to high-severity: whatever its severity. 
 
 Inputs:
 - A local git repository path (it will have a .git directory).
@@ -98,7 +98,7 @@ Goal:
   signature matches).
 
 Hard rules:
-- Only use the provided git tools to inspect commits.
+- Use the provided git tools to inspect commits.
 - Prefer evidence from diffs over speculation.
 - Skip docs-only, formatting-only, test-only, or pure refactor changes unless the diff shows an actual bug fix.
 - Commit message alone is never sufficient evidence of a fix. Investigate the difference of lines.
@@ -133,13 +133,13 @@ Finding fields (schema {FINDING_SCHEMA_VERSION}):
 Workflow (recommended):
 1) Use write_todos to plan.
 2) Treat inspiration_repo_path as repo_path for all git tools.
-3) If git_recent_commits is available, call git_recent_commits(repo_path, since_days, max_count). Use the subjects to pick
-   a smaller set of likely fixes (ex: subjects containing "fix", "security", "vuln", "cve", "sanitize", "overflow", "race", "dos", "leak").
+3) If git_recent_commits is available, call git_recent_commits(repo_path, since_days, max_count). 
 4) If git_show_commit is available, call git_show_commit(repo_path, sha, max_patch_lines) for likely fixes and extract evidence.
 5) Try to resolve GitHub owner/repo using git_github_repo(repo_path). If that succeeds, also call
    github_recent_prs(owner, repo, since_days, max_prs, from_pr, to_pr) / github_recent_issues(owner, repo, since_days, max_issues)
    for the same window (unless from_pr/to_pr is provided), then fetch details (github_fetch_pr / github_fetch_pr_files / github_fetch_issue)
-   only for the items that look like fixes.
+   only for the items that look like fixes. Use github_fetch_pr_comments to read review comments and
+   discussion when they may clarify the nature of a fix.
    If include_github is false, skip all GitHub tools.
 6) Write /outputs/findings.json.
 """
@@ -199,6 +199,9 @@ Workflow (recommended):
    - Use ast_grep(repo_path, pattern, language) for structural code matching (e.g. find all calls to a function
      with specific argument shapes, or match code patterns regardless of variable naming). This is more precise than
      text grep for code patterns. ast_grep may not be installed; if it returns an error, fall back to git_grep.
+   - Use git_log_search(repo_path, pattern) to check if the target repo already has a commit that fixes
+     the same issue (search for keywords from the finding title or tags).
+   - Use git_ls_files(repo_path, path_prefix) to explore the project structure and find relevant source files.
    - Decide applies=true/false/unknown with a confidence score.
 4) Write /outputs/target_assessment.json.
 """
@@ -216,6 +219,7 @@ def create_inspiration_agent(
         github_recent_prs,
         github_fetch_pr,
         github_fetch_pr_files,
+        github_fetch_pr_comments,
     ]
     if include_commits:
         tools = [
@@ -237,7 +241,7 @@ def create_inspiration_agent(
 def create_target_agent(model: BaseChatModel, cache: BaseCache | None = None) -> Any:
     return create_deep_agent(
         model=model,
-        tools=[git_grep, git_show_file, git_diff, ast_grep],
+        tools=[git_grep, git_show_file, git_diff, ast_grep, git_log_search, git_ls_files],
         system_prompt=TARGET_AGENT_PROMPT,
         response_format=AutoStrategy(TargetAssessmentsResponse),
         cache=cache,

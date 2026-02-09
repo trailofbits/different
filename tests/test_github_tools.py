@@ -259,6 +259,7 @@ def test_github_fetch_pr_success_and_error(monkeypatch: pytest.MonkeyPatch) -> N
             "number": 12,
             "title": "PR",
             "state": "closed",
+            "labels": [{"name": "bug"}, {"name": "security"}],
             "merged_at": None,
             "updated_at": None,
             "html_url": "https://example.com",
@@ -267,6 +268,7 @@ def test_github_fetch_pr_success_and_error(monkeypatch: pytest.MonkeyPatch) -> N
     )
     pr = gh.github_fetch_pr.invoke({"owner": "acme", "repo": "widgets", "number": 12})
     assert pr["number"] == 12
+    assert pr["labels"] == ["bug", "security"]
     assert len(pr["body"]) == 12000
 
     monkeypatch.setattr(gh, "_github_request_json", lambda _url: ["nope"])
@@ -281,3 +283,46 @@ def test_github_fetch_pr_files_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(gh, "_github_request_json", boom)
     results = gh.github_fetch_pr_files.invoke({"owner": "acme", "repo": "widgets", "number": 12})
     assert "error" in results[0]
+
+
+def test_github_fetch_pr_comments(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_request(url: str) -> list[dict]:
+        if "/pulls/" in url and "/comments" in url:
+            return [
+                {
+                    "user": {"login": "alice"},
+                    "body": "review comment " + "x" * 5000,
+                    "created_at": "2024-01-01T00:00:00Z",
+                    "path": "src/main.py",
+                    "line": 42,
+                },
+            ]
+        return [
+            {
+                "user": {"login": "bob"},
+                "body": "issue comment",
+                "created_at": "2024-01-02T00:00:00Z",
+            },
+        ]
+
+    monkeypatch.setattr(gh, "_github_request_json", fake_request)
+    comments = gh.github_fetch_pr_comments.invoke(
+        {"owner": "acme", "repo": "widgets", "number": 10}
+    )
+    assert len(comments) == 2
+    assert comments[0]["user"] == "alice"
+    assert comments[0]["path"] == "src/main.py"
+    assert comments[0]["line"] == 42
+    assert len(comments[0]["body"]) == 4000  # truncated
+    assert comments[1]["user"] == "bob"
+    assert comments[1]["path"] is None
+    assert comments[1]["line"] is None
+
+
+def test_github_fetch_pr_comments_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def boom(_url: str):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(gh, "_github_request_json", boom)
+    result = gh.github_fetch_pr_comments.invoke({"owner": "acme", "repo": "widgets", "number": 10})
+    assert "error" in result[0]

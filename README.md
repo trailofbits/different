@@ -9,6 +9,8 @@ Different is a variant-analysis agentic tool built with DeepAgents. It does two 
 
 The logic is agentic: an LLM calls local Git tools (and optional GitHub API tools) in a loop to inspect commits, diffs, and related PR/issue context. The target assessment agent now follows a security-judge style and appends a clear verdict to each assessment's `why` field.
 
+The inspiration agent can fetch PR labels and review comments for richer context. The target agent can search commit messages (`git_log_search`) to check if a fix was already applied, and list tracked files (`git_ls_files`) to explore the project structure.
+
 ## When to use it
 - You are fuzzing two parsers, `A` and `B`, that should behave almost identically. Run `different` to check that recent bug/vuln fixes from codebase `A` don't apply to codebase `B`.
 - A CVE drops for library `X`. You have an internal fork or a similar implementation. Point `different` at `X` as inspiration and your codebase as target to quickly check if the same bug class affects you.

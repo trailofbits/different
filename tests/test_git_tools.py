@@ -122,6 +122,42 @@ def test_git_diff_truncates(git_repo: Path) -> None:
     assert "[diff truncated]" in result["diff"]
 
 
+def test_git_log_search_finds_commit(git_repo: Path) -> None:
+    results = git_tools.git_log_search.invoke({"repo_path": str(git_repo), "pattern": "initial"})
+    assert len(results) == 1
+    assert results[0]["subject"] == "initial"
+    assert "sha" in results[0]
+    assert "date" in results[0]
+
+
+def test_git_log_search_no_results(git_repo: Path) -> None:
+    results = git_tools.git_log_search.invoke(
+        {"repo_path": str(git_repo), "pattern": "zzz_nonexistent_zzz"}
+    )
+    assert results == []
+
+
+def test_git_ls_files(git_repo: Path) -> None:
+    files = git_tools.git_ls_files.invoke({"repo_path": str(git_repo)})
+    assert "file.txt" in files
+
+
+def test_git_ls_files_with_prefix(git_repo: Path) -> None:
+    # Add a file in a subdirectory
+    sub = git_repo / "sub"
+    sub.mkdir()
+    (sub / "nested.txt").write_text("hello", encoding="utf-8")
+    _git(git_repo, ["add", "sub/nested.txt"])
+    _git(git_repo, ["commit", "-m", "add nested"])
+
+    files = git_tools.git_ls_files.invoke({"repo_path": str(git_repo), "path_prefix": "sub/"})
+    assert files == ["sub/nested.txt"]
+
+    all_files = git_tools.git_ls_files.invoke({"repo_path": str(git_repo)})
+    assert "file.txt" in all_files
+    assert "sub/nested.txt" in all_files
+
+
 def test_ast_grep_missing_binary(git_repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(shutil, "which", lambda _name: None)
     result = git_tools.ast_grep.invoke({"repo_path": str(git_repo), "pattern": "line1"})
