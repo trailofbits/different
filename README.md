@@ -7,13 +7,13 @@ Different is a variant-analysis agentic tool built with DeepAgents. It does two 
 - First, it looks at an "inspiration" local Git repository and tries to extract recent bug fixes and security fixes, skipping docs/formatting/test/refactor-only commits unless the diff shows an actual bug fix. It outputs a structured JSON file with one entry per fix, including idea-level root causes and tags so matching can be flexible.
 - Then, it takes that JSON and checks a “target” local Git repository to see if the same problems likely apply there. It outputs another JSON file with one entry per finding.
 
-The logic is agentic: an LLM calls local Git tools (and optional GitHub API tools) in a loop to inspect commits, diffs, and related PR/issue context. The target assessment agent now follows a security-judge style and appends a clear verdict to each assessment's `why` field.
+The logic is agentic: an LLM calls local Git tools (and optional GitHub API tools) in a loop to inspect commits, diffs, and related PR/issue context.
 
 ## When to use it
 - You are fuzzing two parsers, `A` and `B`, that should behave almost identically. Run `different` to check that recent bug/vuln fixes from codebase `A` don't apply to codebase `B`.
 - A CVE drops for library `X`. You have an internal fork or a similar implementation. Point `different` at `X` as inspiration and your codebase as target to quickly check if the same bug class affects you.
 - Before doing code review for codebase `B`, run `different` against a well-maintained sibling codebase `A` to see what kinds of vulnerabilities are being fixed there and get inspiration from that.
-- Give it as context to an LLM/agentinc app. Feed the output to another agent and ask follow-up questions, e.g. _"could a fuzzer have found these bugs? If yes, generate a harness."_
+- Give it as context to an LLM/agentinc app when doing LLM-based bug-hunting, so that your agent has a context full of valid and fresh bugs. 
 
 ## Requirements
 
@@ -51,7 +51,7 @@ make test
 
 ## Configuration
 
-The app reads `different.toml`. This is where you set the “recent” window (days + max commits), how many patch lines are fetched per commit, whether GitHub enrichment is enabled, whether HTML reports are generated, and the default model settings. You can also set `extract.since_date` (YYYY-MM-DD or ISO-8601) to scan from a fixed date; it overrides `since_days`.
+The app reads `different.toml`. This is where you set the "recent" window (days + max commits), how many patch lines are fetched per commit, whether GitHub enrichment is enabled, whether HTML reports are generated, and the default model settings. You can also set `extract.since_date` (YYYY-MM-DD or ISO-8601) to scan from a fixed date; it overrides `since_days`.
 You can override the model per run with `--model`.
 
 ## Usage
