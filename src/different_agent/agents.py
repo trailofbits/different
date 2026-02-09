@@ -74,7 +74,7 @@ class TargetAssessmentsResponse(BaseModel):
 
 INSPIRATION_AGENT_PROMPT = f"""You are a security engineer, and you analyze a codebase and extract structured “fix findings” or "vulnerability fix findings"
 
-The goal is to extract all bug fixes that may have addressed previously introduced security issues, ranging from low to high-severity: whatever its severity. 
+The goal is to extract all bug fixes that may have addressed previously introduced security issues, ranging from low to high-severity: whatever its severity.
 
 Inputs:
 - A local git repository path (it will have a .git directory).
@@ -133,7 +133,7 @@ Finding fields (schema {FINDING_SCHEMA_VERSION}):
 Workflow (recommended):
 1) Use write_todos to plan.
 2) Treat inspiration_repo_path as repo_path for all git tools.
-3) If git_recent_commits is available, call git_recent_commits(repo_path, since_days, max_count). 
+3) If git_recent_commits is available, call git_recent_commits(repo_path, since_days, max_count).
 4) If git_show_commit is available, call git_show_commit(repo_path, sha, max_patch_lines) for likely fixes and extract evidence.
 5) Try to resolve GitHub owner/repo using git_github_repo(repo_path). If that succeeds, also call
    github_recent_prs(owner, repo, since_days, max_prs, from_pr, to_pr) / github_recent_issues(owner, repo, since_days, max_issues)
