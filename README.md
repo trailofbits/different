@@ -9,6 +9,8 @@ Different is a variant-analysis agentic tool built with DeepAgents. It does two 
 
 The logic is agentic: an LLM calls local Git tools (and optional GitHub API tools) in a loop to inspect commits, diffs, and related PR/issue context.
 
+Each finding includes `id`, `kind`, `severity`, `title`, `root_cause`, `fix_summary`, `evidence`, and `tags`. For `kind="bug"` findings with a concrete severity (not `"unknown"`), it also includes `main_file` and `exploit_risk` (a short paragraph describing how an attacker could exploit the bug and what impact they could get).
+
 The inspiration agent can fetch PR labels and review comments for richer context. The target agent can search commit messages (`git_log_search`) to check if a fix was already applied, and list tracked files (`git_ls_files`) to explore the project structure.
 
 ## When to use it

@@ -10,6 +10,8 @@ def test_render_findings_html_escapes_values() -> None:
             "kind": "bug",
             "severity": "high",
             "title": "Title & stuff",
+            "main_file": "src/<main>.py",
+            "exploit_risk": "<high>",
             "root_cause": "a < b",
             "fix_summary": "use & sanitize",
         }
@@ -18,6 +20,8 @@ def test_render_findings_html_escapes_values() -> None:
     assert "Findings" in html
     assert "&lt;f-1&gt;" in html
     assert "Title &amp; stuff" in html
+    assert "src/&lt;main&gt;.py" in html
+    assert "&lt;high&gt;" in html
     assert "a &lt; b" in html
     assert "use &amp; sanitize" in html
 

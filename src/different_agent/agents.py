@@ -6,7 +6,7 @@ from deepagents import create_deep_agent
 from langchain.agents.structured_output import AutoStrategy
 from langchain_core.language_models import BaseChatModel
 from langgraph.cache.base import BaseCache
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from different_agent.git_tools import (
     ast_grep,
@@ -28,7 +28,7 @@ from different_agent.github_tools import (
     github_recent_prs,
 )
 
-FINDING_SCHEMA_VERSION = "v1"
+FINDING_SCHEMA_VERSION = "v3"
 
 
 class EvidenceCommit(BaseModel):
@@ -49,10 +49,24 @@ class Finding(BaseModel):
     kind: Literal["bug", "vulnerability", "hardening"]
     title: str
     severity: Literal["low", "medium", "high", "critical", "unknown"]
+    main_file: str | None = None
+    exploit_risk: str | None = None
     root_cause: str
     fix_summary: str
     evidence: FindingEvidence
     tags: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _require_bug_risk_fields(self) -> Finding:
+        if self.kind != "bug" or self.severity == "unknown":
+            return self
+        if not self.main_file:
+            raise ValueError("main_file is required for kind='bug' with severity!='unknown'")
+        if not self.exploit_risk or not self.exploit_risk.strip():
+            raise ValueError("exploit_risk is required for kind='bug' with severity!='unknown'")
+        if self.exploit_risk.strip().lower() in {"low", "medium", "high", "critical", "unknown"}:
+            raise ValueError("exploit_risk must be a short paragraph, not a keyword")
+        return self
 
 
 class FindingsResponse(BaseModel):
@@ -105,6 +119,9 @@ Hard rules:
 - Do NOT paste entire diffs into the JSON. Keep diff_snippets short.
 - If you include GitHub issues/PRs, include their links in evidence.links.
 - Be conservative: if you can't justify severity, set severity="unknown".
+- If kind="bug" and severity!="unknown":
+  - main_file must be set to the single most relevant file path for the fix (usually pick 1 entry from evidence.files_changed).
+  - exploit_risk must be a short paragraph explaining how an attacker could exploit the bug and what they could gain (preconditions + impact). Keep it similar length to root_cause/fix_summary.
 - root_cause must describe the generalized mechanism (unsafe pattern + conditions), not just the local symbol name.
 - fix_summary must describe the conceptual mitigation, not only the exact code change.
 - tags should include short idea-level keywords to help variant matching (e.g. "ambiguous-encoding",
@@ -120,6 +137,8 @@ Finding fields (schema {FINDING_SCHEMA_VERSION}):
 - kind ("bug" | "vulnerability" | "hardening")
 - title (string)
 - severity ("low" | "medium" | "high" | "critical" | "unknown")
+- main_file (string|null)  # required when kind="bug" and severity!="unknown"
+- exploit_risk (string|null)  # required when kind="bug" and severity!="unknown"
 - root_cause (string)
 - fix_summary (string)
 - evidence {{

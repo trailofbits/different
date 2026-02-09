@@ -17,6 +17,11 @@ def render_findings_html(findings: list[dict]) -> str:
     now = datetime.now(UTC).replace(microsecond=0).isoformat()
     rows = []
     for f in findings:
+        kind = f.get("kind")
+        severity = f.get("severity")
+        show_risk_fields = kind == "bug" and severity not in (None, "", "unknown")
+        main_file = f.get("main_file") if show_risk_fields else ""
+        exploit_risk = f.get("exploit_risk") if show_risk_fields else ""
         rows.append(
             "<tr>"
             f"<td>{_safe_json(f.get('id'))}</td>"
@@ -25,6 +30,8 @@ def render_findings_html(findings: list[dict]) -> str:
             f"<td>{_safe_json(f.get('title'))}</td>"
             f"<td><pre>{_safe_json(f.get('root_cause'))}</pre></td>"
             f"<td><pre>{_safe_json(f.get('fix_summary'))}</pre></td>"
+            f"<td>{_safe_json(main_file)}</td>"
+            f"<td><pre>{_safe_json(exploit_risk)}</pre></td>"
             "</tr>"
         )
 
@@ -58,6 +65,8 @@ def render_findings_html(findings: list[dict]) -> str:
           <th>title</th>
           <th>root_cause</th>
           <th>fix_summary</th>
+          <th>main_file</th>
+          <th>exploit_risk</th>
         </tr>
       </thead>
       <tbody>
