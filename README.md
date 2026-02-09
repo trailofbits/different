@@ -10,10 +10,11 @@ Different is a variant-analysis agentic tool built with DeepAgents. It does two 
 The logic is agentic: an LLM calls local Git tools (and optional GitHub API tools) in a loop to inspect commits, diffs, and related PR/issue context. The target assessment agent now follows a security-judge style and appends a clear verdict to each assessment's `why` field.
 
 ## When to use it
-- **Differential fuzzing.** You are fuzzing two parsers, `A` and `B`, that should behave almost identically. Run `different` to check that recent bug/vuln fixes from codebase `A` don't apply to codebase `B`.
-- **N-day hunting.** A CVE drops for library `X`. You have an internal fork or a similar implementation. Point `different` at `X` as inspiration and your codebase as target to quickly check if the same bug class affects you.
-- **Code review.** Before reviewing codebase `B`, run `different` against a well-maintained sibling codebase `A` to see what kinds of vulnerabilities are being fixed there and get inspiration from that.
-- **Agentic context.** Feed the structured JSON output to another agent and ask follow-up questions, e.g. _"could a fuzzer have found these bugs? If yes, generate a harness."_
+- You are fuzzing two parsers, `A` and `B`, that should behave almost identically. Run `different` to check that recent bug/vuln fixes from codebase `A` don't apply to codebase `B`.
+- A CVE drops for library `X`. You have an internal fork or a similar implementation. Point `different` at `X` as inspiration and your codebase as target to quickly check if the same bug class affects you.
+- Before doing code review for codebase `B`, run `different` against a well-maintained sibling codebase `A` to see what kinds of vulnerabilities are being fixed there and get inspiration from that.
+- Give it as context to an LLM/agentinc app. Feed the output to another agent and ask follow-up questions, e.g. _"could a fuzzer have found these bugs? If yes, generate a harness."_
+
 ## Requirements
 
 The default config uses GPT-5.2 with xhigh reasonning. If you switch to a Claude model via `--model`, you need `ANTHROPIC_API_KEY`.
