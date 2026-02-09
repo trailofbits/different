@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/trailofbits/different/actions/workflows/ci.yml/badge.svg?label=tests)](https://github.com/trailofbits/different/actions/workflows/ci.yml)
 
-Different is a small agentic app built with DeepAgents. It does two things:
+Different is a variant-analysis agentic tool built with DeepAgents. It does two things:
 
 - First, it looks at an "inspiration" local Git repository and tries to extract recent bug fixes and security fixes, skipping docs/formatting/test/refactor-only commits unless the diff shows an actual bug fix. It outputs a structured JSON file with one entry per fix, including idea-level root causes and tags so matching can be flexible.
 - Then, it takes that JSON and checks a “target” local Git repository to see if the same problems likely apply there. It outputs another JSON file with one entry per finding.
