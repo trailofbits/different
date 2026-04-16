@@ -19,11 +19,11 @@ build-backend = "uv_build"
 
 [dependency-groups]
 lint = [
-    "ruff>=0.14.14",
-    "ty>=0.0.13",
+    "ruff>=0.15.9",
+    "ty>=0.0.29",
 ]
 test = [
-    "pytest>=9.0.2",
+    "pytest>=9.0.3",
     "pytest-cov>=6.0",
 ]
 dev = [
