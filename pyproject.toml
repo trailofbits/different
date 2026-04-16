@@ -5,16 +5,16 @@ description = "Agentic tool to extract bug/vulnerability fixes from an inspirati
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-  "deepagents>=0.3.8",
-  "langchain-openai>=0.2.0",
-  "python-dotenv>=1.0.0",
+  "deepagents>=0.5.1",
+  "langchain-openai>=1.1.12",
+  "python-dotenv>=1.2.2",
 ]
 
 [project.scripts]
 different-agent = "different_agent.cli:main"
 
 [build-system]
-requires = ["uv_build>=0.9.26"]
+requires = ["uv_build>=0.11.5"]
 build-backend = "uv_build"
 
 [dependency-groups]
@@ -24,7 +24,7 @@ lint = [
 ]
 test = [
     "pytest>=9.0.2",
-    "pytest-cov>=6.0",
+    "pytest-cov>=7.1.0",
 ]
 dev = [
     { include-group = "lint" },
